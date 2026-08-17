@@ -48,6 +48,10 @@
 | DR-008 | 定时任务 | APScheduler / 系统计划任务+CLI / Celery | **APScheduler** | 单机单任务场景进程内定时器即可，零额外依赖；手动 CLI 命令保留作兜底与调试入口 | 2026-08-17 | 用户 |
 | DR-009 | 版本管理与远程备份 | 仅本地 git / GitHub 私有仓库 / Gitee 私有仓库 | **git + GitHub 私有仓库（gh CLI 管理）** | 远程备份才能真正防止代码丢失；gh CLI 已安装可全程代操作；私有仓库不公开代码 | 2026-08-17 | 用户 |
 | DR-010 | GitHub 推送通道 | HTTPS 直连 / HTTPS 走本地代理 / SSH github.com:22 / SSH over 443 | **SSH over 443（remote 为 `git@ssh.github.com:…`）** | 实测国内 443 被阻断、代理节点不可用；ssh.github.com:443 可达；该地址形式同时绕过全局 git 的 HTTPS 重写规则（`.gitconfig` 中 insteadOf），不改全局配置 | 2026-08-17 | 用户 |
+| DR-011 | 爬取范围 | 仅 cs.SE / cs.SE 全量 + cs.AI 关键词过滤 | **cs.SE 全量 + cs.AI 关键词过滤** | cs.SE 是软件工程主分类全量收；cs.AI 论文量大，仅按 AI4SE 关键词过滤进入候选，兼顾召回与噪声 | 2026-08-17 | 用户 |
+| DR-012 | 首次历史回填深度 | 近 6 个月 / 近 1 年 / 不回填 | **近 6 个月** | 在 DBLP API 限流约束下几十分钟级可完成；数据量足够支撑趋势展示 | 2026-08-17 | 用户 |
+| DR-013 | Python 依赖与环境管理 | uv / pip+venv / conda | **uv** | 现代标准，自动管理 Python 版本+依赖+锁文件；通过 `python -m uv` 调用（Scripts 不在 PATH） | 2026-08-17 | 用户 |
+| DR-014 | 前端包管理器 | npm / pnpm / yarn | **npm** | Node 自带零额外依赖；registry 已配 npmmirror 国内镜像 | 2026-08-17 | 用户 |
 
 ### 默认值 / 待确认项（M0 启动时逐项确认，未确认前按默认执行）
 
@@ -246,8 +250,8 @@ AI4SE-PaperTracker/
 ### 本地开发
 
 ```bash
-# 后端（端口 8000）
-cd backend && uvicorn app.main:app --reload --port 8000
+# 后端（端口 8000；依赖经 uv 管理，uvicorn 不全局安装）
+cd backend && python -m uv run uvicorn app.main:app --reload --port 8000
 # 前端（端口 5173，proxy 到后端）
 cd frontend && npm run dev
 ```
@@ -281,14 +285,14 @@ cd frontend && npm run dev
 
 | 里程碑 | 内容 | 验收标准 | 状态 |
 |---|---|---|---|
-| **M0 脚手架** | git init、目录结构、FastAPI/Vue 空壳、前后端联通、.env.example、决策记录补全（含默认值确认） | 浏览器访问前端能调到后端接口 | ⬜ 未开始 |
+| **M0 脚手架** | git init、目录结构、FastAPI/Vue 空壳、前后端联通、.env.example、决策记录补全（含默认值确认） | 浏览器访问前端能调到后端接口 | ✅ 完成（2026-08-17） |
 | **M1 爬虫** | 数据模型+Alembic、arXiv/DBLP 客户端、匹配器、去重 upsert、APScheduler、历史回填脚本 | 单次完整跑通 ①→③→⑥；重跑无重复数据；crawl_runs 计数正确 | ⬜ 未开始 |
 | **M2 分类** | 主题落库、关键词初筛、DeepSeek 精标（结构化输出/重试/成本开关）、中文摘要、批量回填 | 抽样 50 篇人工检查，分类准确率与主题覆盖可接受 | ⬜ 未开始 |
 | **M3 API** | 列表/详情/主题/venue/趋势端点，过滤排序分页 | Swagger 文档完整，curl 可完成全部前端所需查询 | ⬜ 未开始 |
 | **M4 前端** | 列表页+筛选侧栏、详情页（双链接/标签/中文摘要）、趋势页（ECharts）、搜索 | 浏览→筛选→详情→趋势主路径无阻断 | ⬜ 未开始 |
 | **M5 打磨** | 增量更新持续验证、匹配歧义复核、可选 Docker、备份与 README | 连续 2 周自动增量更新无误；数据可恢复 | ⬜ 未开始 |
 
-**当前进度**：本文档已建立（2026-08-17），M0 待启动。
+**当前进度**：M0 已完成（2026-08-17），M1 爬虫待启动。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装）；前端 `npm run dev`（frontend/ 下，proxy 到 8000）。
 
 ## 14. 数据与合规
 
