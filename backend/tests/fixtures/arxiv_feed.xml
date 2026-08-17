@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <title>ArXiv Query: cat:cs.SE AND submittedDate</title>
+  <entry>
+    <id>http://arxiv.org/abs/2502.12345v2</id>
+    <updated>2026-02-05T10:00:00Z</updated>
+    <published>2026-02-01T09:00:00Z</published>
+    <title>Repairing Bugs with \emph{LLM} Agents: An Empirical Study</title>
+    <summary>
+      We study how large language models   help repair software bugs across
+      real-world projects.
+    </summary>
+    <author><name>Xiaoyu Wang</name></author>
+    <author><name>Alice Zhang</name></author>
+    <arxiv:journal_ref>Accepted at ICSE 2026</arxiv:journal_ref>
+    <arxiv:comment>32 pages, 8 figures</arxiv:comment>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2602.99999</id>
+    <updated>2026-08-10T00:00:00Z</updated>
+    <published>2026-08-10T00:00:00Z</published>
+    <title>Code Translation Benchmarks Revisited</title>
+    <summary>We revisit code translation benchmarks and report new findings.</summary>
+    <author><name>Bob Li</name></author>
+    <category term="cs.SE" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.PL" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+</feed>

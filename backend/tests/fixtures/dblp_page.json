@@ -1,0 +1,40 @@
+{
+  "result": {
+    "hits": {
+      "@total": "21840",
+      "hit": [
+        {
+          "info": {
+            "key": "conf/icse/Wang2025Repairing",
+            "title": "Repairing Bugs with LLM Agents: An Empirical Study",
+            "venue": "2025 IEEE/ACM 47th International Conference on Software Engineering (ICSE)",
+            "year": "2025",
+            "authors": {
+              "author": [
+                {"text": "Xiaoyu Wang"},
+                {"text": "Alice Zhang"}
+              ]
+            },
+            "doi": "10.1145/1234567",
+            "url": "https://dblp.org/rec/conf/icse/Wang2025Repairing"
+          }
+        },
+        {
+          "info": {
+            "key": "conf/ase/Li2026Translation",
+            "title": "Code Translation Benchmarks Revisited",
+            "venue": "2026 41st IEEE/ACM International Conference on Automated Software Engineering (ASE)",
+            "year": "2026",
+            "authors": {
+              "author": [
+                {"text": "Bob Li"}
+              ]
+            },
+            "doi": "10.1145/7654321",
+            "url": "https://dblp.org/rec/conf/ase/Li2026Translation"
+          }
+        }
+      ]
+    }
+  }
+}

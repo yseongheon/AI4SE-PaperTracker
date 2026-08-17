@@ -4,12 +4,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.health import router as health_router
+from app.crawler.scheduler import create_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # M1 起在此挂载 APScheduler 定时任务；M0 仅占位
+    # 每日定时爬取（DR-008：APScheduler 进程内调度，手动 CLI 兜底）
+    scheduler = create_scheduler()
+    scheduler.start()
+    app.state.scheduler = scheduler
     yield
+    scheduler.shutdown(wait=False)
 
 
 app = FastAPI(
