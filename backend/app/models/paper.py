@@ -10,6 +10,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     Float,
@@ -68,6 +69,9 @@ class Paper(Base):
     is_ai4se_candidate: Mapped[bool] = mapped_column(Boolean, default=False)  # 关键词初筛命中
     is_ai4se_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)  # LLM 精标确认
     match_status: Mapped[str] = mapped_column(String(16), default=MatchStatus.NONE.value)
+    match_candidates: Mapped[list[dict] | None] = mapped_column(  # 歧义时多候选快照，人工复核用
+        JSON, nullable=True, default=None
+    )
     summary_zh: Mapped[str | None] = mapped_column(Text, nullable=True)  # LLM 中文摘要
     status: Mapped[str] = mapped_column(String(16), default=PaperStatus.FETCHED.value)
 

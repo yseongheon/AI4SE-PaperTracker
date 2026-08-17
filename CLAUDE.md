@@ -130,7 +130,7 @@ AI4SE-PaperTracker/
 │   │   ├── api/               # 路由：papers.py topics.py venues.py stats.py
 │   │   ├── services/          # 业务层（路由与爬虫共用）
 │   │   └── crawler/           # arxiv_client.py dblp_client.py matcher.py keyword_rules.py classifier.py scheduler.py rate_limiter.py
-│   ├── scripts/               # run_crawl.py run_classify.py backfill.py seed_venues.py seed_topics.py
+│   ├── scripts/               # run_crawl.py run_classify.py review_pending.py seed_venues.py seed_topics.py
 │   └── tests/                 # test_normalize.py test_matcher.py test_rate_limiter.py ...
 ├── frontend/
 │   ├── package.json           # vue3 vite typescript pinia vue-router axios element-plus echarts
@@ -152,7 +152,7 @@ AI4SE-PaperTracker/
 | 表 | 关键字段 | 说明 |
 |---|---|---|
 | **venues** | id, short_name(FSE), full_name, type(conference/journal), rank(CCF-A/B/C/none), dblp_key | CCF 名单是数据不是代码。初版仅四大 A 会；改名单=改数据 |
-| **papers** | id, title, title_normalized(索引), abstract, arxiv_id(unique 可空), arxiv_url, dblp_key(unique 可空), doi(可空), venue_id(FK 可空), year, published_at, updated_at, is_ai4se_candidate, is_ai4se_confirmed, match_status(none/matched/pending/rejected), summary_zh, status(fetched/matched/classified/ready), created_at, updated_at | 核心表。双链接展示（arXiv + DBLP/DOI）；索引：(title_normalized)、(venue_id, year) |
+| **papers** | id, title, title_normalized(索引), abstract, arxiv_id(unique 可空), arxiv_url, dblp_key(unique 可空), doi(可空), venue_id(FK 可空), year, published_at, updated_at, is_ai4se_candidate, is_ai4se_confirmed, match_status(none/matched/pending/rejected), match_candidates(JSON 可空，多候选歧义快照，人工复核用), summary_zh, status(fetched/matched/classified/ready), created_at, updated_at | 核心表。双链接展示（arXiv + DBLP/DOI）；索引：(title_normalized)、(venue_id, year) |
 | **authors** | id, name, name_normalized(unique) | v1 仅小写/去点归一；同名歧义不处理 |
 | **paper_authors** | paper_id(FK), author_id(FK), position | N:M 关联，复合唯一 (paper_id, position) |
 | **topics** | id, slug(code_generation), name_zh(代码生成), description, parent_id(可空), is_active | 主题分类法是数据。初版 10 主题：code_generation 代码生成 / code_repair 代码修复 / code_translation 代码翻译 / code_summarization 代码摘要 / defect_detection 缺陷检测与定位 / testing 自动化测试 / analysis 软件分析 / requirements 需求工程 / llm4se_general LLM4SE 通用 / other 其他 |
@@ -289,6 +289,7 @@ cd frontend && npm run dev
 | 手动跑一次完整爬取 | `cd backend && python -m scripts.run_crawl` |
 | 历史回填（近 180 天） | `python -m scripts.run_crawl --backfill --days 180` |
 | 批量重新分类全部论文 | `python -m scripts.run_classify` |
+| 复核 DBLP 匹配歧义 | `python -m scripts.review_pending list`（`accept 论文id --idx N/--key 键`、`reject 论文id`） |
 | 导入 CCF 名单 | `python -m scripts.seed_venues` |
 | 导入主题分类法 | `python -m scripts.seed_topics` |
 | 新增一个主题 | 向 topics 表插入一行（数据驱动，无需改代码） |
@@ -304,9 +305,9 @@ cd frontend && npm run dev
 | **M2 分类** | 主题落库、关键词初筛、DeepSeek 精标（结构化输出/重试/成本开关）、中文摘要、批量回填 | 抽样 50 篇人工检查，分类准确率与主题覆盖可接受 | ✅ 完成（2026-08-17） |
 | **M3 API** | 列表/详情/主题/venue/趋势端点，过滤排序分页 | Swagger 文档完整，curl 可完成全部前端所需查询 | ✅ 完成（2026-08-17） |
 | **M4 前端** | 列表页+筛选侧栏、详情页（双链接/标签/中文摘要）、趋势页（ECharts）、搜索 | 浏览→筛选→详情→趋势主路径无阻断 | ✅ 完成（2026-08-18） |
-| **M5 打磨** | 增量更新持续验证、匹配歧义复核、可选 Docker、备份与 README | 连续 2 周自动增量更新无误；数据可恢复 | ⬜ 未开始 |
+| **M5 打磨** | 匹配歧义复核（半自动脚本）、README；Docker 不做（个人本地跑）；增量验证 1 周（DR 拍板：A②+B②+C①+D②） | 连续 1 周自动增量更新无误；数据可恢复 | ⏳ 进行中（2026-08-18，A/B/C 完成，D 观察期至 08-25） |
 
-**当前进度**：M0~M3 已完成（2026-08-17）。M1 验证记录：4 个 A 会 stream 全量拉取 16967 条（ICSE 7894 / sigsoft 3739 / kbse 3776 / issta 1558，缓存 7 天）；arXiv 近 3 天 4 篇幂等（重跑 new=0/updated=4）；匹配器用真实 DBLP 记录端到端验证通过。M2 验证记录：49 条关键词规则初筛 3875 篇 → 2503 候选；DeepSeek 精标 2501 篇全部完成、**0 失败、成本 $0.65**（deepseek-chat，limit $5）；确认 AI4SE **2233 篇**（58%）；主题分布（llm 标签）：llm4se_general 1761 / testing 803 / code_generation 750 / analysis 670 / defect_detection 532 / code_repair 314 / requirements 135 / code_summarization 78 / code_translation 61 / other 51，1986 篇多主题；抽样 15 篇质量验证通过。M3 验证记录：61 pytest 全绿（含 17 个 API 集成测试，TestClient+内存库）；curl 真实验证全部端点——列表（分页/搜索/主题/会议/年份/AI4SE 过滤、newest/venue 排序）、详情（作者/标签/中文摘要/双链接/404）、topics 计数（llm4se_general 1761）、venues 计数（FSE 66 / ASE 5 / ICSE 3）、trends 三分组（topic 10 条线按天零填充 / venue 3 线 / year 2 年）。M4 验证记录（用户拍板：el-table 表格 + 左侧筛选侧栏 + 多页签）：`vue-tsc` 严格模式 + `vite build` 一次通过；前后端冒烟验证经 dev 代理（localhost:5173 → 127.0.0.1:8000）全部端点可达（列表真实数据/详情/主题计数/会议计数/趋势按天序列）；trends 周/月聚合在前端完成（DR-020 方案 A，见 utils/trends.ts，年份分组恒按原样展示）；年份筛选选项取自趋势接口年份分组（数据驱动）。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装）；前端 `npm run dev`（frontend/ 下，proxy 到 8000；注意 vite 默认绑定 IPv6 ::1，浏览器用 localhost 而非 127.0.0.1 访问）。M5 打磨待启动。
+**当前进度**：M0~M3 已完成（2026-08-17）。M1 验证记录：4 个 A 会 stream 全量拉取 16967 条（ICSE 7894 / sigsoft 3739 / kbse 3776 / issta 1558，缓存 7 天）；arXiv 近 3 天 4 篇幂等（重跑 new=0/updated=4）；匹配器用真实 DBLP 记录端到端验证通过。M2 验证记录：49 条关键词规则初筛 3875 篇 → 2503 候选；DeepSeek 精标 2501 篇全部完成、**0 失败、成本 $0.65**（deepseek-chat，limit $5）；确认 AI4SE **2233 篇**（58%）；主题分布（llm 标签）：llm4se_general 1761 / testing 803 / code_generation 750 / analysis 670 / defect_detection 532 / code_repair 314 / requirements 135 / code_summarization 78 / code_translation 61 / other 51，1986 篇多主题；抽样 15 篇质量验证通过。M3 验证记录：61 pytest 全绿（含 17 个 API 集成测试，TestClient+内存库）；curl 真实验证全部端点——列表（分页/搜索/主题/会议/年份/AI4SE 过滤、newest/venue 排序）、详情（作者/标签/中文摘要/双链接/404）、topics 计数（llm4se_general 1761）、venues 计数（FSE 66 / ASE 5 / ICSE 3）、trends 三分组（topic 10 条线按天零填充 / venue 3 线 / year 2 年）。M4 验证记录（用户拍板：el-table 表格 + 左侧筛选侧栏 + 多页签）：`vue-tsc` 严格模式 + `vite build` 一次通过；前后端冒烟验证经 dev 代理（localhost:5173 → 127.0.0.1:8000）全部端点可达（列表真实数据/详情/主题计数/会议计数/趋势按天序列）；trends 周/月聚合在前端完成（DR-020 方案 A，见 utils/trends.ts，年份分组恒按原样展示）；年份筛选选项取自趋势接口年份分组（数据驱动）。M5 验证记录（2026-08-18，用户拍板 A②+B②+C①+D②）：① A 匹配歧义复核——matcher 在 pending 时把多候选快照写入 papers.match_candidates（JSON 新列，migration 7c8d79d4ca91），新增 scripts/review_pending.py（list/accept --idx|--key/reject，venue 按 dblp_key 前缀反查）；现有 pending=0（matched 74 全部定案）；71 pytest 全绿（+10 复核脚本测试）；② C README 访客版完成；③ D 增量验证启动——08-18 首跑成功：arXiv 429 退避重试成功、DBLP 4 stream 全缓存命中零 API 请求、匹配 2826 条 matched=0/pending=0、幂等 new=0/updated=1，观察期至 08-25。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装）；前端 `npm run dev`（frontend/ 下，proxy 到 8000；注意 vite 默认绑定 IPv6 ::1，浏览器用 localhost 而非 127.0.0.1 访问）。
 
 ## 14. 数据与合规
 

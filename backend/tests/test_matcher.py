@@ -99,6 +99,7 @@ def test_single_hit_matches_and_backfills(db):
     assert paper.venue is not None and paper.venue.short_name == "ICSE"
     assert paper.year == 2026
     assert paper.status == "matched"  # fetched → matched 提升
+    assert paper.match_candidates is None  # 定案后候选清空
 
 
 def test_ambiguous_hits_go_pending(db):
@@ -113,6 +114,12 @@ def test_ambiguous_hits_go_pending(db):
     assert stats.pending == 1 and stats.matched == 0
     assert paper.match_status == MatchStatus.PENDING.value
     assert paper.dblp_key is None  # 不自动关联
+    # M5：候选快照落库，供 scripts/review_pending.py 人工复核
+    assert paper.match_candidates is not None
+    assert len(paper.match_candidates) == 2
+    assert paper.match_candidates[0]["key"] == "conf/icse/a"
+    assert paper.match_candidates[0]["venue_short_name"] == "ICSE"
+    assert paper.match_candidates[0]["year"] == 2026
 
 
 def test_clue_disambiguates_ambiguous(db):

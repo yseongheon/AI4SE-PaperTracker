@@ -1,31 +1,92 @@
 # AI4SE PaperTracker
 
-自动跟踪 **AI4SE（AI for Software Engineering）** 论文的网站：定时从 arXiv 拉取最新论文，经 DBLP 判定其在 CCF-A 软件工程会议（ICSE / FSE / ASE / ISSTA）的发表情况，用「关键词 + DeepSeek LLM」混合方案识别 AI4SE 论文、打主题标签（代码翻译、代码修复、代码生成、缺陷检测等）并生成中文摘要，以 Web 页面展示。
+自动跟踪「AI 赋能软件工程（AI4SE）」论文的网站。每日从 arXiv 拉取最新论文，判定其在 CCF-A 软件工程会议（ICSE / FSE / ASE / ISSTA）的发表情况，识别 AI4SE 论文并按研究主题分类、生成中文摘要，最终以 Web 页面展示与可视化。
+
+> 开发规范、架构设计与决策记录见 [CLAUDE.md](CLAUDE.md)（项目唯一事实来源）。
+
+## 核心功能
+
+- **每日自动爬取**：定时从 arXiv 拉取 `cs.SE`（软件工程）分类最新论文，历史回填脚本兜底
+- **A 会判定**：通过 DBLP 收录记录判定论文是否发表于 CCF-A 软件工程会议，双链接展示（arXiv 预印本 + DBLP/DOI 正式版）
+- **AI4SE 识别与分类**：关键词初筛 + DeepSeek LLM 精标，判定是否属于 AI4SE，并打主题标签（代码生成、代码修复、缺陷检测、自动化测试、需求工程等 10 类）
+- **中文摘要**：LLM 为每篇 AI4SE 论文生成中文摘要
+- **Web 展示**：论文列表（搜索 / 主题 / 会议 / 年份筛选、分页）、论文详情、主题与会议趋势图表（按天/周/月聚合）
 
 ## 技术栈
 
-- **前端**：Vue 3 + TypeScript + Vite + Element Plus + ECharts（Pinia、Vue Router、Axios）
-- **后端**：Python + FastAPI + SQLAlchemy 2.x + SQLite + APScheduler（uv 管理依赖）
-- **外部服务**：arXiv API、DBLP API、DeepSeek API
+|层|技术|
+|---|---|
+|前端|Vue 3 + TypeScript + Vite + Element Plus + ECharts（Pinia / Vue Router / Axios）|
+|后端|Python + FastAPI + SQLAlchemy 2.x + SQLite + APScheduler（Alembic 迁移）|
+|外部服务|arXiv API（爬取）、DBLP API（A 会判定）、DeepSeek API（分类与中文摘要）|
 
 ## 快速开始
 
-```bash
-# 1. 后端（端口 8000，首次先复制环境变量）
-cp .env.example backend/.env
-cd backend && python -m uv run uvicorn app.main:app --reload --port 8000
+### 环境要求
 
-# 2. 前端（端口 5173，/api 自动代理到后端）
-cd frontend && npm install && npm run dev
+- Python ≥ 3.11（依赖经 [uv](https://docs.astral.sh/uv/) 管理）
+- Node.js ≥ 20
+
+### 1. 启动后端（端口 8000）
+
+```bash
+cd backend
+cp ../.env.example ../.env   # 首次：填入 DEEPSEEK_API_KEY
+python -m uv run uvicorn app.main:app --port 8000
 ```
 
-浏览器访问 http://localhost:5173 ，右上角显示「后端已联通」即搭建成功。API 文档：http://localhost:8000/docs
+- API 文档（Swagger）：<http://127.0.0.1:8000/docs>
+- 数据库文件位于 `data/papers.db`（SQLite，自动按 Alembic 迁移建表）
 
-## 文档
+### 2. 启动前端（端口 5173）
 
-- 开发规范与决策记录：[CLAUDE.md](CLAUDE.md)（唯一事实来源，所有方案选择由用户拍板并记录在案）
-- 当前进度：M0 脚手架 ✅ → M1 爬虫 → M2 分类 → M3 API → M4 前端 → M5 打磨
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## 仓库
+打开 <http://localhost:5173>（开发模式经 Vite proxy 调用后端，无跨域配置）。
 
-私有仓库，推送通道为 SSH over 443（`git@ssh.github.com:…`）。
+### 3. 初始化与首次回填（可选）
+
+```bash
+cd backend
+python -m uv run python -m scripts.seed_venues   # 导入 CCF-A 会议名单
+python -m uv run python -m scripts.seed_topics   # 导入主题分类法
+python -m uv run python -m scripts.run_crawl --backfill --days 180   # 历史回填（受 DBLP 限流约束）
+python -m uv run python -m scripts.run_classify  # 关键词初筛 + LLM 精标 + 中文摘要
+```
+
+## 常用命令
+
+|任务|命令（backend/ 下）|
+|---|---|
+|手动跑一次完整爬取|`python -m scripts.run_crawl`|
+|历史回填（近 180 天）|`python -m scripts.run_crawl --backfill --days 180`|
+|批量重新分类|`python -m scripts.run_classify`|
+|复核 DBLP 匹配歧义|`python -m scripts.review_pending list`|
+|数据库迁移|`python -m uv run alembic upgrade head`|
+
+## 数据与合规
+
+- **arXiv API**：免费无认证，礼貌限流（≥3s/请求）；仅展示元数据与摘要，不下载存储 PDF
+- **DBLP**：免费；请求间隔 ≥2s，限流敏感，客户端带本地缓存
+- **DeepSeek API**：按 token 计费，启用月度成本上限开关（`LLM_COST_LIMIT_USD`），超出自动暂停
+- 仅展示论文元数据、公开链接与 LLM 生成摘要，不搬运付费墙内容
+
+## 项目结构
+
+```text
+AI4SE-PaperTracker/
+├── backend/
+│   ├── app/                # FastAPI 应用（api 路由 / services 业务 / models ORM / crawler 爬虫）
+│   ├── scripts/            # 命令行脚本（爬取/分类/回填/复核）
+│   ├── alembic/            # 数据库迁移
+│   └── tests/              # pytest（71 个测试，离线可跑）
+├── frontend/
+│   └── src/                # Vue 3 前端（views / components / stores / api / types）
+├── data/                   # SQLite 数据库与爬取缓存（不入 git）
+├── CLAUDE.md               # 开发文档与决策记录
+└── .env.example            # 环境变量模板
+```

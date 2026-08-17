@@ -77,7 +77,17 @@ def match_papers(
 
         hit = _resolve(cands, paper)
         if hit is None:
+            # 多候选歧义：候选快照落库（M5，人工复核脚本 scripts/review_pending.py 用）
             paper.match_status = MatchStatus.PENDING.value
+            paper.match_candidates = [
+                {
+                    "key": h.key,
+                    "venue_short_name": h.venue_short_name,
+                    "year": h.year,
+                    "doi": h.doi,
+                }
+                for h in cands
+            ]
             stats.pending += 1
             continue
 
@@ -88,6 +98,7 @@ def match_papers(
         if hit.year:
             paper.year = hit.year  # 以正式发表年份为准
         paper.match_status = MatchStatus.MATCHED.value
+        paper.match_candidates = None  # 已定案，清掉历史候选
         if paper.status == "fetched":
             paper.status = "matched"
         stats.matched += 1
