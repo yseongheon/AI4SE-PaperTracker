@@ -42,3 +42,10 @@ def test_author_last_name():
     assert author_last_name("Xiaoyu Wang") == "wang"
     assert author_last_name("Alice B. Zhang") == "zhang"
     assert author_last_name("") == ""
+
+
+def test_author_last_name_dblp_disambiguation_suffix():
+    # DBLP 同名作者带消歧数字后缀（如 "Seongmin Lee 0001"）：姓氏应取 "lee" 而非 "0001"
+    assert author_last_name("Seongmin Lee 0001") == "lee"
+    assert author_last_name("Miao Miao 0001") == "miao"
+    assert author_last_name("Bob Li 0002") == "li"

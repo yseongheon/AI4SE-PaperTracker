@@ -11,26 +11,31 @@ from app.models import Venue
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-# short_name | full_name | dblp_key（DBLP stream 名，匹配器按此批量拉取）
+# short_name | full_name | dblp_key（DBLP 集合标识）| stream_key（搜索 API stream 名，匹配器按此批量拉取）
+# 实测（2026-08-17）：FSE 的 stream 名是 conf/sigsoft、ASE 的是 conf/kbse（不是 conf/fse / conf/ase）
 CCF_A_SE_VENUES = [
     (
         "ICSE",
         "International Conference on Software Engineering",
+        "conf/icse",
         "conf/icse",
     ),
     (
         "FSE",
         "ACM International Conference on the Foundations of Software Engineering (ESEC/FSE)",
         "conf/fse",
+        "conf/sigsoft",
     ),
     (
         "ASE",
         "IEEE/ACM International Conference on Automated Software Engineering",
         "conf/ase",
+        "conf/kbse",
     ),
     (
         "ISSTA",
         "ACM SIGSOFT International Symposium on Software Testing and Analysis",
+        "conf/issta",
         "conf/issta",
     ),
 ]
@@ -38,7 +43,7 @@ CCF_A_SE_VENUES = [
 
 def seed_venues(db) -> int:
     upserted = 0
-    for short_name, full_name, dblp_key in CCF_A_SE_VENUES:
+    for short_name, full_name, dblp_key, stream_key in CCF_A_SE_VENUES:
         venue = db.query(Venue).filter_by(dblp_key=dblp_key).first()
         if venue is None:
             db.add(
@@ -48,12 +53,18 @@ def seed_venues(db) -> int:
                     type="conference",
                     rank="A",
                     dblp_key=dblp_key,
+                    stream_key=stream_key,
                 )
             )
             upserted += 1
-            logger.info("added venue: %s (%s)", short_name, dblp_key)
+            logger.info("added venue: %s (%s)", short_name, stream_key)
         else:
-            logger.info("venue exists: %s (%s)", short_name, dblp_key)
+            # 已存在的 venue 补 stream_key（幂等重跑安全）
+            if venue.stream_key != stream_key:
+                venue.stream_key = stream_key
+                logger.info("venue %s: stream_key -> %s", short_name, stream_key)
+            else:
+                logger.info("venue exists: %s (%s)", short_name, stream_key)
     db.commit()
     return upserted
 

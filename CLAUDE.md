@@ -179,9 +179,16 @@ AI4SE-PaperTracker/
 
 | 外部服务 | 规则 |
 |---|---|
-| arXiv API | 每请求间隔 **≥3 秒**、单连接；每页 max_results ≤ 500；带描述性 User-Agent；指数退避重试（1s/2s/4s/8s，最多 3 次） |
-| DBLP API | 请求间隔 **1–2 秒**；429 时尊重 Retry-After 头 |
+| arXiv API | 每请求间隔 **≥3 秒**、单连接；每页 max_results ≤ 500；带描述性 User-Agent；指数退避重试（1s/2s/4s/8s，最多 3 次）；submittedDate 搜索索引有约 1–2 天延迟，增量窗口 3 天已容错 |
+| DBLP API | 请求间隔 **2 秒**（取红线 1–2s 的保守档）；429 时尊重 Retry-After 头；**实测教训：短时间内高频连续请求会触发临时封禁（连接被重置 WinError 10054，约数分钟到半小时解除）——单次匹配运行前估算请求数，不要连续重复跑匹配任务** |
 | DeepSeek API | 并发受控（默认 2），失败重试最多 2 次，超时跳过并记录 |
+
+> DBLP 实测补充（2026-08-17）：
+> - **翻页参数是 `f`（first），不是 `start`**：`start` 会被当前节点静默忽略，每页返回相同 100 条（曾导致无限循环拉取 115+ 页）——这是「h 参数无效」表象的真相
+> - `stream:xxx:` 查询每页返回条数由 `h` 控制（实测 h=100/h=50 均生效），响应 `result.hits.@total` 是可靠的总数，用于分页终止；ICSE 全历史 7894 条
+> - **stream key 与 DBLP 集合 key 不同**：FSE 用 `stream:conf/sigsoft:`、ASE 用 `stream:conf/kbse:`（`conf/fse`/`conf/ase` 均查不到）——已存 venues.stream_key 列
+> - 排序并非严格年份倒序，不能靠「整页全旧」截断；逐年 `AND year:YYYY:` 修饰符部分节点不可靠
+> - 限流极敏感：突发 >3~6 个请求/分钟即返回非 JSON 错误页/503/429/连接重置，休息 1~2 分钟恢复；客户端已实现「失败等 90s 重试同页、每 5 页休 20s、全量结果本地缓存 7 天（data/dblp_cache/），**且只缓存完整拉取（start 越过 @total）的结果，异常截断不落缓存**」
 
 ### 调度
 
@@ -289,13 +296,13 @@ cd frontend && npm run dev
 | 里程碑 | 内容 | 验收标准 | 状态 |
 |---|---|---|---|
 | **M0 脚手架** | git init、目录结构、FastAPI/Vue 空壳、前后端联通、.env.example、决策记录补全（含默认值确认） | 浏览器访问前端能调到后端接口 | ✅ 完成（2026-08-17） |
-| **M1 爬虫** | 数据模型+Alembic、arXiv/DBLP 客户端、匹配器、去重 upsert、APScheduler、历史回填脚本 | 单次完整跑通 ①→③→⑥；重跑无重复数据；crawl_runs 计数正确 | ⬜ 未开始 |
+| **M1 爬虫** | 数据模型+Alembic、arXiv/DBLP 客户端、匹配器、去重 upsert、APScheduler、历史回填脚本 | 单次完整跑通 ①→③→⑥；重跑无重复数据；crawl_runs 计数正确 | ✅ 完成（2026-08-17） |
 | **M2 分类** | 主题落库、关键词初筛、DeepSeek 精标（结构化输出/重试/成本开关）、中文摘要、批量回填 | 抽样 50 篇人工检查，分类准确率与主题覆盖可接受 | ⬜ 未开始 |
 | **M3 API** | 列表/详情/主题/venue/趋势端点，过滤排序分页 | Swagger 文档完整，curl 可完成全部前端所需查询 | ⬜ 未开始 |
 | **M4 前端** | 列表页+筛选侧栏、详情页（双链接/标签/中文摘要）、趋势页（ECharts）、搜索 | 浏览→筛选→详情→趋势主路径无阻断 | ⬜ 未开始 |
 | **M5 打磨** | 增量更新持续验证、匹配歧义复核、可选 Docker、备份与 README | 连续 2 周自动增量更新无误；数据可恢复 | ⬜ 未开始 |
 
-**当前进度**：M0 已完成（2026-08-17），M1 爬虫待启动。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装）；前端 `npm run dev`（frontend/ 下，proxy 到 8000）。
+**当前进度**：M0、M1 已完成（2026-08-17）。M1 验证记录：4 个 A 会 stream 全量拉取 16967 条（ICSE 7894 / sigsoft 3739 / kbse 3776 / issta 1558，缓存 7 天）；arXiv 近 3 天 4 篇幂等（重跑 new=0/updated=4）；匹配器用真实 DBLP 记录端到端验证通过（dblp_key/venue/year/doi 回填）；pytest 26 通过。M2 分类待启动（需用户提供 DEEPSEEK_API_KEY）。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装）；前端 `npm run dev`（frontend/ 下，proxy 到 8000）。
 
 ## 14. 数据与合规
 

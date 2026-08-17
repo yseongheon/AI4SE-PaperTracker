@@ -36,7 +36,12 @@ def normalize_author(name: str | None) -> str:
 
 
 def author_last_name(name: str) -> str:
-    """取作者姓氏（末段）：DBLP 匹配时做姓氏粗校验用。"""
+    """取作者姓氏（末段）：DBLP 匹配时做姓氏粗校验用。
+
+    DBLP 同名作者带消歧数字后缀（如 "Seongmin Lee 0001"），纯数字末段视为后缀跳过。
+    """
     t = normalize_author(name)
     parts = [p for p in t.split() if p]
+    while parts and parts[-1].isdigit():
+        parts.pop()
     return parts[-1] if parts else ""

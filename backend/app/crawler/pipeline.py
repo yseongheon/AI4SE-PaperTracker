@@ -65,11 +65,20 @@ def run_pipeline(db: Session, lookback_days: int | None = None, min_year: int | 
 
 
 def upsert_papers(db: Session, entries: list[ArxivEntry]) -> tuple[int, int]:
-    """按 arxiv_id upsert（幂等）：新论文插入，已存在则更新元数据；作者 N:M 重建。"""
+    """按 arxiv_id upsert（幂等）：新论文插入，已存在则更新元数据；作者 N:M 重建。
+
+    批次内按 normalized_id 去重：arXiv 搜索会把同一论文的 v1/v2 版本作为独立
+    entry 返回（normalized_id 相同）。会话 autoflush=False，第二条 query 看不到
+    第一条 pending 的 INSERT，会重复插入违反 unique(arxiv_id)——故先按批次去重。
+    """
     new_count = 0
     updated_count = 0
+    seen_ids: set[str] = set()
     for entry in entries:
         arxiv_id = entry.normalized_id
+        if arxiv_id in seen_ids:
+            continue  # 同批次重复版本（v1/v2），第一条已处理
+        seen_ids.add(arxiv_id)
         paper = db.query(Paper).filter_by(arxiv_id=arxiv_id).first()
         if paper is None:
             paper = Paper(arxiv_id=arxiv_id, arxiv_url=entry.url or f"https://arxiv.org/abs/{arxiv_id}")
@@ -93,16 +102,26 @@ def upsert_papers(db: Session, entries: list[ArxivEntry]) -> tuple[int, int]:
 
 
 def _replace_authors(db: Session, paper: Paper, author_names: list[str]) -> None:
-    """重建作者关联（幂等）：归一化查重，重复作者复用同一 Author 记录。"""
+    """重建作者关联（幂等）：归一化查重，重复作者复用同一 Author 记录。
+
+    同一论文内重复出现的作者名（arXiv 元数据偶发）跳过：PaperAuthor 的
+    (paper_id, author_id) 复合主键不允许同作者两行。
+    """
     paper.author_links.clear()
-    for position, name in enumerate(author_names):
+    seen: set[str] = set()
+    position = 0
+    for name in author_names:
         norm = normalize_author(name)
+        if norm in seen or not norm:
+            continue
+        seen.add(norm)
         author = db.query(Author).filter_by(name_normalized=norm).first()
         if author is None:
             author = Author(name=name, name_normalized=norm)
             db.add(author)
             db.flush()  # 获取新作者 id
         paper.author_links.append(PaperAuthor(author=author, position=position))
+        position += 1
 
 
 def run_dblp_match(db: Session, min_year: int | None = None) -> MatchStats:
@@ -118,15 +137,20 @@ def run_dblp_match(db: Session, min_year: int | None = None) -> MatchStats:
         return MatchStats()
 
     min_year = min_year or _auto_min_year(db)
-    current_year = datetime.utcnow().year
-    years = range(min_year, current_year + 2)  # +2 容错跨年提前发表
     hits = []
     client = DblpClient()
     for venue in venues:
         if not venue.dblp_key:
             continue
-        stream_hits = client.fetch_stream(venue.dblp_key, venue.short_name, years=years)
-        hits.extend(stream_hits)
+        try:
+            # stream_key 与 DBLP 集合 key 不同（实测：FSE→conf/sigsoft、ASE→conf/kbse）
+            # 拉取按年份倒序，min_year 截断 + 7 天本地缓存（见 dblp_client）
+            stream_key = venue.stream_key or venue.dblp_key
+            stream_hits = client.fetch_stream(stream_key, venue.short_name, min_year=min_year)
+            hits.extend(stream_hits)
+        except Exception as exc:
+            # 单会失败不中断整体：本轮跳过该会，下轮重跑会重试（幂等）
+            logger.warning("dblp stream %s failed, skip: %s", venue.dblp_key, exc)
 
     papers = db.query(Paper).filter(Paper.match_status == "none").all()
     venue_by_short = {v.short_name: v for v in venues}

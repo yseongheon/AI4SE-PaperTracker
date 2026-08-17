@@ -13,7 +13,8 @@ class Venue(Base):
     full_name: Mapped[str] = mapped_column(String(255))  # 如 International Conference on Software Engineering
     type: Mapped[str] = mapped_column(String(16), default="conference")  # conference/journal
     rank: Mapped[str] = mapped_column(String(8), default="A")  # CCF-A/B/C/none
-    dblp_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)  # 如 conf/icse
+    dblp_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)  # DBLP 集合标识，如 conf/fse
+    stream_key: Mapped[str | None] = mapped_column(String(64), nullable=True)  # 搜索 API stream 名（实测：FSE→conf/sigsoft、ASE→conf/kbse）
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     papers: Mapped[list["Paper"]] = relationship(back_populates="venue")  # noqa: F821

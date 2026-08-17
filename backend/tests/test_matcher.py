@@ -187,3 +187,19 @@ def test_dblp_parse_hits():
     assert h.year == 2025
     assert h.doi == "10.1145/1234567"
     assert hits[1].venue_short_name == "ICSE"  # 传入的短名原样标记
+
+
+def test_dblp_parse_page_returns_total():
+    """分页终止依赖 @total：字符串数字也能解析（DBLP 返回 "21840"）。"""
+    hits, total = DblpClient._parse_page(FIXTURE_DBLP.read_text(encoding="utf-8"), "ICSE")
+
+    assert total == 21840
+    assert len(hits) == 2
+
+
+def test_dblp_parse_page_total_missing():
+    """@total 缺失时返回 None（循环检测兜底生效，不会崩溃）。"""
+    hits, total = DblpClient._parse_page("{}", "ICSE")
+
+    assert total is None
+    assert hits == []
