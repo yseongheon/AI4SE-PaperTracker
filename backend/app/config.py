@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-chat"
     llm_cost_limit_usd: float = 5.0
+    # 价格估算（deepseek-chat 官方定价，USD/百万 token；仅用于成本开关，非计费）
+    llm_price_input_usd_per_1m: float = 0.27
+    llm_price_output_usd_per_1m: float = 1.10
 
     # 爬取调度
     crawl_lookback_days: int = 3
