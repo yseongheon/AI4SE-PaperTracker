@@ -46,6 +46,7 @@
 | DR-006 | 数据库 | SQLite / PostgreSQL / MySQL | **SQLite** | 零配置；本项目只有爬虫一个写入方（单写者），量级（年万级）完全够用；SQLAlchemy+Alembic 迁移保底，日后可平滑切 PG | 2026-08-17 | 用户 |
 | DR-007 | 前端组件库 | Element Plus / Naive UI / Ant Design Vue | **Element Plus + ECharts** | 生态最大、中文文档最全；表格/筛选/表单组件成熟，契合论文列表+筛选侧栏+趋势图场景 | 2026-08-17 | 用户 |
 | DR-008 | 定时任务 | APScheduler / 系统计划任务+CLI / Celery | **APScheduler** | 单机单任务场景进程内定时器即可，零额外依赖；手动 CLI 命令保留作兜底与调试入口 | 2026-08-17 | 用户 |
+| DR-009 | 版本管理与远程备份 | 仅本地 git / GitHub 私有仓库 / Gitee 私有仓库 | **git + GitHub 私有仓库（gh CLI 管理）** | 远程备份才能真正防止代码丢失；gh CLI 已安装可全程代操作；私有仓库不公开代码 | 2026-08-17 | 用户 |
 
 ### 默认值 / 待确认项（M0 启动时逐项确认，未确认前按默认执行）
 
