@@ -300,12 +300,12 @@ cd frontend && npm run dev
 |---|---|---|---|
 | **M0 脚手架** | git init、目录结构、FastAPI/Vue 空壳、前后端联通、.env.example、决策记录补全（含默认值确认） | 浏览器访问前端能调到后端接口 | ✅ 完成（2026-08-17） |
 | **M1 爬虫** | 数据模型+Alembic、arXiv/DBLP 客户端、匹配器、去重 upsert、APScheduler、历史回填脚本 | 单次完整跑通 ①→③→⑥；重跑无重复数据；crawl_runs 计数正确 | ✅ 完成（2026-08-17） |
-| **M2 分类** | 主题落库、关键词初筛、DeepSeek 精标（结构化输出/重试/成本开关）、中文摘要、批量回填 | 抽样 50 篇人工检查，分类准确率与主题覆盖可接受 | ⬜ 未开始 |
+| **M2 分类** | 主题落库、关键词初筛、DeepSeek 精标（结构化输出/重试/成本开关）、中文摘要、批量回填 | 抽样 50 篇人工检查，分类准确率与主题覆盖可接受 | ✅ 完成（2026-08-17） |
 | **M3 API** | 列表/详情/主题/venue/趋势端点，过滤排序分页 | Swagger 文档完整，curl 可完成全部前端所需查询 | ⬜ 未开始 |
 | **M4 前端** | 列表页+筛选侧栏、详情页（双链接/标签/中文摘要）、趋势页（ECharts）、搜索 | 浏览→筛选→详情→趋势主路径无阻断 | ⬜ 未开始 |
 | **M5 打磨** | 增量更新持续验证、匹配歧义复核、可选 Docker、备份与 README | 连续 2 周自动增量更新无误；数据可恢复 | ⬜ 未开始 |
 
-**当前进度**：M0、M1 已完成（2026-08-17）。M1 验证记录：4 个 A 会 stream 全量拉取 16967 条（ICSE 7894 / sigsoft 3739 / kbse 3776 / issta 1558，缓存 7 天）；arXiv 近 3 天 4 篇幂等（重跑 new=0/updated=4）；匹配器用真实 DBLP 记录端到端验证通过（dblp_key/venue/year/doi 回填）；pytest 26 通过。M2 分类待启动（需用户提供 DEEPSEEK_API_KEY）。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装）；前端 `npm run dev`（frontend/ 下，proxy 到 8000）。
+**当前进度**：M0、M1、M2 已完成（2026-08-17）。M1 验证记录：4 个 A 会 stream 全量拉取 16967 条（ICSE 7894 / sigsoft 3739 / kbse 3776 / issta 1558，缓存 7 天）；arXiv 近 3 天 4 篇幂等（重跑 new=0/updated=4）；匹配器用真实 DBLP 记录端到端验证通过；pytest 26 通过。M2 验证记录：49 条关键词规则初筛 3875 篇 → 2503 候选（llm4se_general 命中 2111 篇，候选率高因 2026 年 cs.SE 论文普遍涉 LLM）；DeepSeek 精标 2501 篇全部完成、**0 失败、成本 $0.65**（deepseek-chat，limit $5）；确认 AI4SE **2233 篇**（58%）；主题分布（llm 标签）：llm4se_general 1761 / testing 803 / code_generation 750 / analysis 670 / defect_detection 532 / code_repair 314 / requirements 135 / code_summarization 78 / code_translation 61 / other 51，1986 篇多主题；抽样 15 篇质量验证通过（主题准确、中文摘要专业）；pytest 44 通过。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装）；前端 `npm run dev`（frontend/ 下，proxy 到 8000）。M3 API 待启动。
 
 ## 14. 数据与合规
 
