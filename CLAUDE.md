@@ -47,6 +47,7 @@
 | DR-007 | 前端组件库 | Element Plus / Naive UI / Ant Design Vue | **Element Plus + ECharts** | 生态最大、中文文档最全；表格/筛选/表单组件成熟，契合论文列表+筛选侧栏+趋势图场景 | 2026-08-17 | 用户 |
 | DR-008 | 定时任务 | APScheduler / 系统计划任务+CLI / Celery | **APScheduler** | 单机单任务场景进程内定时器即可，零额外依赖；手动 CLI 命令保留作兜底与调试入口 | 2026-08-17 | 用户 |
 | DR-009 | 版本管理与远程备份 | 仅本地 git / GitHub 私有仓库 / Gitee 私有仓库 | **git + GitHub 私有仓库（gh CLI 管理）** | 远程备份才能真正防止代码丢失；gh CLI 已安装可全程代操作；私有仓库不公开代码 | 2026-08-17 | 用户 |
+| DR-010 | GitHub 推送通道 | HTTPS 直连 / HTTPS 走本地代理 / SSH github.com:22 / SSH over 443 | **SSH over 443（remote 为 `git@ssh.github.com:…`）** | 实测国内 443 被阻断、代理节点不可用；ssh.github.com:443 可达；该地址形式同时绕过全局 git 的 HTTPS 重写规则（`.gitconfig` 中 insteadOf），不改全局配置 | 2026-08-17 | 用户 |
 
 ### 默认值 / 待确认项（M0 启动时逐项确认，未确认前按默认执行）
 
