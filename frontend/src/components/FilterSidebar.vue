@@ -60,7 +60,8 @@ const { topic, venue, year, isAi4se, sort } = storeToRefs(filter)
   width: 230px;
   flex-shrink: 0;
   padding: 16px;
-  border-right: 1px solid #eee;
+  background: var(--brand-surface);
+  border-right: 1px solid var(--brand-border);
   overflow-y: auto;
 }
 .block {
@@ -69,8 +70,10 @@ const { topic, venue, year, isAi4se, sort } = storeToRefs(filter)
 .block-title {
   font-weight: 600;
   margin-bottom: 8px;
-  color: #606266;
+  color: var(--brand-text-muted);
   font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 .vert {
   display: flex;

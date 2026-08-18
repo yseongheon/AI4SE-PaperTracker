@@ -136,15 +136,16 @@ const STATUS_TEXT: Record<string, string> = {
   font-weight: 600;
 }
 .summary-zh {
-  border-left: 4px solid #409eff;
+  border-left: 4px solid var(--brand-primary);
 }
 .summary-zh p {
   font-size: 15px;
   line-height: 1.8;
+  color: var(--brand-text);
 }
 .abstract {
   line-height: 1.7;
-  color: #606266;
+  color: var(--brand-text);
   white-space: pre-wrap;
 }
 .links {
@@ -152,9 +153,9 @@ const STATUS_TEXT: Record<string, string> = {
   gap: 24px;
 }
 .authors {
-  color: #606266;
+  color: var(--el-text-color-regular);
 }
 .muted {
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 </style>

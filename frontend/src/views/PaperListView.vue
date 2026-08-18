@@ -75,7 +75,7 @@ function authorsText(authors: string[]): string {
           @clear="applySearch"
         />
         <el-button type="primary" @click="applySearch">搜索</el-button>
-        <span class="total">共 {{ paperStore.total }} 篇</span>
+        <span class="total">共 <span class="mono">{{ paperStore.total }}</span> 篇</span>
       </div>
 
       <el-alert
@@ -154,8 +154,12 @@ function authorsText(authors: string[]): string {
   width: 320px;
 }
 .total {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+.total :deep(.mono) {
+  font-weight: 700;
+  color: var(--brand-text);
 }
 .error {
   margin-bottom: 12px;
@@ -167,7 +171,7 @@ function authorsText(authors: string[]): string {
   cursor: pointer;
 }
 .muted {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
 }
 .pager {
   margin-top: 14px;

@@ -63,7 +63,7 @@ onMounted(async () => {
   margin-bottom: 14px;
 }
 .label {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
 }
 </style>

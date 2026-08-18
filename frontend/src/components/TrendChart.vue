@@ -25,6 +25,7 @@ const aggregated = computed(() => {
 })
 
 const option = computed(() => ({
+  textStyle: { fontFamily: 'Poppins, Microsoft YaHei, sans-serif' },
   tooltip: { trigger: 'axis' as const },
   legend: { type: 'scroll' as const, bottom: 0 },
   grid: { left: 50, right: 24, top: 30, bottom: 48 },

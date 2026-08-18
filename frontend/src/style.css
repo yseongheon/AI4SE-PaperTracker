@@ -1,9 +1,184 @@
+/* ============================================================
+   AI4SE PaperTracker — Professional 设计系统全局样式
+   品牌 token：primary #FECE14（黄）/ secondary #000（黑）/ surface #FFF
+   字体：Poppins（拉丁）+ Microsoft YaHei（中文回退）+ IBM Plex Mono（数字/ID）
+   间距：4/8/12/16/24/32；WCAG 2.2 AA（黄底黑字、焦点态 2px 黑色 outline）
+   ============================================================ */
+
+:root {
+  /* ---- 品牌 token ---- */
+  --brand-primary: #fece14;
+  --brand-secondary: #000000;
+  --brand-surface: #ffffff;
+  --brand-text: #111827;
+  --brand-text-muted: #6b7280;
+  --brand-border: #e5e7eb;
+  --brand-border-strong: #d1d5db;
+  --brand-bg-soft: #fffbea; /* 黄色 4% 浅底，hover/选中背景 */
+
+  /* ---- 间距系统 ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* ---- 圆角 / 阴影 ---- */
+  --radius: 6px;
+  --shadow-card: 0 1px 2px rgba(17, 24, 39, 0.05), 0 1px 3px rgba(17, 24, 39, 0.08);
+
+  /* ---- 字体 ---- */
+  --font-sans: 'Poppins', 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', Consolas, 'Courier New', monospace;
+
+  /* ============================================================
+     Element Plus 主题覆盖（黄黑主色）
+     ============================================================ */
+  --el-color-primary: #fece14;
+  --el-color-primary-light-3: #fedc55; /* hover */
+  --el-color-primary-light-5: #feea89;
+  --el-color-primary-light-7: #fef1c2;
+  --el-color-primary-light-8: #fef5da;
+  --el-color-primary-light-9: #fffbea; /* 浅黄背景 */
+  --el-color-primary-dark-2: #d4af0a; /* active */
+  --el-color-success: #16a34a;
+  --el-color-success-light-9: #f0fdf4;
+  --el-color-warning: #d97706;
+  --el-color-warning-light-9: #fffbeb;
+  --el-color-danger: #dc2626;
+  --el-color-danger-light-9: #fef2f2;
+  --el-color-info: #6b7280;
+  --el-color-info-light-9: #f9fafb;
+
+  --el-text-color-primary: #111827;
+  --el-text-color-regular: #374151;
+  --el-text-color-secondary: #6b7280;
+  --el-text-color-placeholder: #9ca3af;
+
+  --el-border-color: #e5e7eb;
+  --el-border-color-light: #f3f4f6;
+  --el-border-color-lighter: #f9fafb;
+  --el-fill-color-light: #f9fafb;
+  --el-fill-color-lighter: #fcfcfd;
+  --el-bg-color-page: #fafafa;
+  --el-font-family: var(--font-sans);
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html,
 body {
-  font-family: -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--brand-text);
+  background: var(--brand-surface);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 等宽数字（论文 ID / 年份 / 统计数字） */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 可访问性：键盘焦点态（WCAG 2.2 AA） ---- */
+:focus-visible {
+  outline: 2px solid #111827;
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Element Plus 组件细节对齐
+   ============================================================ */
+
+/* 主按钮：黄底黑字（黄底白字对比度不足 1.7:1，禁用） */
+.el-button--primary {
+  --el-button-text-color: #111827;
+  --el-button-hover-text-color: #111827;
+  --el-button-active-text-color: #111827;
+  --el-button-bg-color: var(--el-color-primary);
+  --el-button-border-color: var(--el-color-primary);
+  --el-button-hover-bg-color: var(--el-color-primary-light-3);
+  --el-button-hover-border-color: var(--el-color-primary-light-3);
+  --el-button-active-bg-color: var(--el-color-primary-dark-2);
+  --el-button-active-border-color: var(--el-color-primary-dark-2);
+  font-weight: 600;
+}
+
+/* 链接：黑字 + 黄色下划线（黄字在白底对比度不足，禁用） */
+a,
+.el-link.el-link--primary {
+  color: var(--brand-text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--brand-primary);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+a:hover,
+.el-link.el-link--primary:hover {
+  background: var(--brand-bg-soft);
+}
+a:focus-visible,
+.el-link:focus-visible {
+  outline: 2px solid #111827;
+  outline-offset: 2px;
+}
+
+/* 表格：浅灰表头 + 黄色 hover 行 */
+.el-table {
+  --el-table-header-bg-color: #f9fafb;
+  --el-table-header-text-color: #111827;
+  --el-table-row-hover-bg-color: var(--brand-bg-soft);
+  --el-table-border-color: #eef0f2;
+}
+.el-table th.el-table__cell {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* 分页：激活页码黄底黑字 */
+.el-pagination.is-background .el-pager li.is-active {
+  color: #111827;
+  font-weight: 700;
+}
+
+/* 标签：加粗文字便于扫描 */
+.el-tag {
+  font-weight: 500;
+}
+
+/* 页签（趋势页） */
+.el-tabs__item.is-active {
+  color: #111827;
+  font-weight: 600;
+}
+.el-tabs__active-bar {
+  background-color: var(--brand-primary);
+  height: 3px;
+}
+
+/* 单选/筛选：选中圆点默认跟随 primary（黄），补黑边增加对比 */
+.el-radio__input.is-checked .el-radio__inner {
+  border-color: #111827;
+}
+.el-radio__input.is-checked + .el-radio__label {
+  color: #111827;
+  font-weight: 600;
+}
+
+/* 卡片（详情页） */
+.el-card {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  border-color: var(--brand-border);
 }
