@@ -22,11 +22,15 @@ const option = computed(() => ({
     formatter: (p: { value: number[] }) =>
       `${props.venues[p.value[1]]} × ${props.topics[p.value[0]]}：${p.value[2]} 篇`,
   },
-  grid: { left: 70, right: 20, top: 10, bottom: 90 },
+  grid: { left: 90, right: 40, top: 30, bottom: 130 },
   xAxis: {
     type: 'category' as const,
     data: props.topics,
-    axisLabel: { rotate: 35, fontFamily: 'Poppins, Microsoft YaHei, sans-serif' },
+    axisLabel: {
+      rotate: 30,
+      fontFamily: 'Poppins, Microsoft YaHei, sans-serif',
+      margin: 12,
+    },
     splitArea: { show: true },
   },
   yAxis: {
@@ -57,7 +61,7 @@ const option = computed(() => ({
 
 <template>
   <div class="chart-heatmap">
-    <VChart class="chart" :option="option" />
+    <VChart class="chart" :option="option" autoresize />
   </div>
 </template>
 
