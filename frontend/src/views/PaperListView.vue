@@ -129,7 +129,9 @@ function filterByAuthor(name: string) {
         <el-button type="primary" @click="applySearch">搜索</el-button>
         <el-popover trigger="click" placement="bottom-start" width="300">
           <template #reference>
-            <el-button>高级筛选<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+            <el-tooltip content="高级筛选：搜索范围 / 作者 / 年份区间 / 最低被引" placement="top">
+              <el-button>高级筛选<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+            </el-tooltip>
           </template>
           <div class="adv-filter">
             <div class="adv-row">
@@ -174,9 +176,11 @@ function filterByAuthor(name: string) {
           </div>
         </el-popover>
         <el-dropdown trigger="click" @command="downloadExport">
-          <el-button>
-            导出筛选结果<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
+          <el-tooltip content="导出符合当前筛选条件的全部论文（不勾选也有效）" placement="top">
+            <el-button>
+              导出筛选结果<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+          </el-tooltip>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="csv">CSV（Excel）</el-dropdown-item>
@@ -190,9 +194,11 @@ function filterByAuthor(name: string) {
           :disabled="!selectedIds.length"
           @command="exportSelected"
         >
-          <el-button :disabled="!selectedIds.length">
-            导出选中 ({{ selectedIds.length }})<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
+          <el-tooltip content="导出当前勾选的论文（先勾选左侧 ☑ 框）" placement="top">
+            <el-button :disabled="!selectedIds.length">
+              导出选中 ({{ selectedIds.length }})<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+          </el-tooltip>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="csv">CSV（Excel）</el-dropdown-item>
@@ -221,7 +227,13 @@ function filterByAuthor(name: string) {
         @row-click="(row: PaperListItem) => goDetail(row.id)"
         @selection-change="onSelectionChange"
       >
-        <el-table-column type="selection" width="40" align="center" />
+        <el-table-column type="selection" width="40" align="center">
+          <template #header>
+            <el-tooltip content="勾选多篇后，点「导出选中」批量导出" placement="top">
+              <span class="sel-hint">☑</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column label="收藏" width="64" align="center">
           <template #default="{ row }">
             <el-button
@@ -262,8 +274,19 @@ function filterByAuthor(name: string) {
         </el-table-column>
         <el-table-column label="年份" width="80" align="center" prop="year" />
         <el-table-column label="被引" width="80" align="center">
+          <template #header>
+            <el-tooltip content="被引次数（Crossref / Semantic Scholar 双源）" placement="top">
+              <span>被引</span>
+            </el-tooltip>
+          </template>
           <template #default="{ row }">
-            <span v-if="row.citation_count != null" class="cite">🔥 {{ row.citation_count }}</span>
+            <el-tooltip
+              v-if="row.citation_count != null"
+              :content="`被引 ${row.citation_count} 次（Crossref / Semantic Scholar）`"
+              placement="top"
+            >
+              <span class="cite">🔥 {{ row.citation_count }}</span>
+            </el-tooltip>
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
@@ -379,6 +402,10 @@ function filterByAuthor(name: string) {
 .cite {
   font-size: 12px;
   color: var(--brand-text);
+}
+.sel-hint {
+  cursor: help;
+  color: var(--el-text-color-secondary);
 }
 .pager {
   margin-top: 14px;

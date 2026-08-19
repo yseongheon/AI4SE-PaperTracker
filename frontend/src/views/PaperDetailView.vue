@@ -131,9 +131,15 @@ const STATUS_TEXT: Record<string, string> = {
       <div class="meta">
         <el-tag v-if="paper.venue" type="warning">{{ paper.venue.short_name }}</el-tag>
         <el-tag v-if="paper.year" type="info">{{ paper.year }}</el-tag>
-        <el-tag v-if="paper.citation_count != null" type="warning" effect="plain">
-          🔥 被引 {{ paper.citation_count }}
-        </el-tag>
+        <el-tooltip
+          v-if="paper.citation_count != null"
+          :content="`被引 ${paper.citation_count} 次（Crossref / Semantic Scholar 双源统计）`"
+          placement="top"
+        >
+          <el-tag type="warning" effect="plain" style="cursor: help">
+            🔥 被引 {{ paper.citation_count }}
+          </el-tag>
+        </el-tooltip>
         <span v-if="paper.published_at" class="muted">发布于 {{ paper.published_at }}</span>
         <span class="muted">· {{ STATUS_TEXT[paper.status] ?? paper.status }}</span>
         <span v-if="paper.venue" class="muted">· {{ MATCH_TEXT[paper.match_status] ?? paper.match_status }}</span>
@@ -141,30 +147,36 @@ const STATUS_TEXT: Record<string, string> = {
 
       <!-- M6 阅读标记：收藏 / 已读 / 稍后读 -->
       <div class="mark-bar">
-        <el-button
-          size="small"
-          round
-          :type="paper.marks.bookmark ? 'primary' : 'default'"
-          @click="toggleMark('bookmark')"
-        >
-          {{ paper.marks.bookmark ? '⭐ 已收藏' : '☆ 收藏' }}
-        </el-button>
-        <el-button
-          size="small"
-          round
-          :type="paper.marks.read ? 'primary' : 'default'"
-          @click="toggleMark('read')"
-        >
-          {{ paper.marks.read ? '✓ 已读' : '标记已读' }}
-        </el-button>
-        <el-button
-          size="small"
-          round
-          :type="paper.marks.read_later ? 'primary' : 'default'"
-          @click="toggleMark('read_later')"
-        >
-          {{ paper.marks.read_later ? '📌 稍后读' : '稍后读' }}
-        </el-button>
+        <el-tooltip content="收藏：在「个人画像」里集中回顾与管理" placement="top">
+          <el-button
+            size="small"
+            round
+            :type="paper.marks.bookmark ? 'primary' : 'default'"
+            @click="toggleMark('bookmark')"
+          >
+            {{ paper.marks.bookmark ? '⭐ 已收藏' : '☆ 收藏' }}
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="已读：列表里该行会淡化显示，可用于「只看未读」筛选" placement="top">
+          <el-button
+            size="small"
+            round
+            :type="paper.marks.read ? 'primary' : 'default'"
+            @click="toggleMark('read')"
+          >
+            {{ paper.marks.read ? '✓ 已读' : '标记已读' }}
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="稍后读：待读清单，可在列表「阅读状态」里筛选" placement="top">
+          <el-button
+            size="small"
+            round
+            :type="paper.marks.read_later ? 'primary' : 'default'"
+            @click="toggleMark('read_later')"
+          >
+            {{ paper.marks.read_later ? '📌 稍后读' : '稍后读' }}
+          </el-button>
+        </el-tooltip>
       </div>
 
       <div class="topics">
@@ -288,9 +300,18 @@ const STATUS_TEXT: Record<string, string> = {
           <span class="card-title">相关论文推荐</span>
         </template>
         <ul class="related">
-          <li v-for="r in paper.related" :key="r.id" @click="goRelated(r.id)">
+          <li
+            v-for="r in paper.related"
+            :key="r.id"
+            class="related-item"
+            @click="goRelated(r.id)"
+          >
             <!-- 标题用 RouterLink 保证跳转可靠；整行点击也跳转（双保险） -->
-            <RouterLink :to="`/papers/${r.id}`" class="related-link">
+            <RouterLink
+              :to="`/papers/${r.id}`"
+              class="related-link"
+              :title="`查看《${r.title}》详情`"
+            >
               {{ r.title }} <span class="related-arrow">→</span>
             </RouterLink>
             <span v-if="r.venue" class="muted">· {{ r.venue.short_name }} {{ r.year ?? '' }}</span>

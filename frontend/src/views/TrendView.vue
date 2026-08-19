@@ -84,7 +84,9 @@ function goAuthor(name: string) {
           <el-table-column type="index" label="#" width="56" align="center" />
           <el-table-column label="学者" min-width="220">
             <template #default="{ row }">
-              <el-link type="primary" @click="goAuthor(row.name)">{{ row.name }}</el-link>
+              <el-tooltip :content="`查看 ${row.name} 的全部论文`" placement="top">
+                <el-link type="primary" @click="goAuthor(row.name)">{{ row.name }}</el-link>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column prop="paper_count" label="论文数" width="100" align="center" />
