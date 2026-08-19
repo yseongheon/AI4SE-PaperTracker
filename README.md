@@ -58,6 +58,18 @@ python -m uv run python -m scripts.run_crawl --backfill --days 180   # 历史回
 python -m uv run python -m scripts.run_classify  # 关键词初筛 + LLM 精标 + 中文摘要
 ```
 
+## 课题组多人使用（生产模式）
+
+```bash
+cd frontend && npm run build   # 构建前端（首次或前端改动后执行）
+cd backend && python -m uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+- 双击根目录 `start.bat` 也会自动走生产模式（检测到 `frontend/dist` 后单端口启动）
+- **组内成员**浏览器访问 `http://<你的局域网 IP>:8000`，自行注册账号使用（账号数据互不干扰）
+- 首次使用建议在 `backend/.env` 配置 `AUTH_SECRET=<随机长字符串>`（防 token 伪造）
+- 成员连不上时，Windows 防火墙放行 8000 端口（bat 启动时有提示命令）
+
 ## 常用命令
 
 |任务|命令（backend/ 下）|
