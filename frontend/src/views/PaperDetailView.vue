@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getBibtex, getDeepSummary, getPaper, setMark } from '../api/papers'
 import TopicTag from '../components/TopicTag.vue'
+import { useAuthStore } from '../stores/authStore'
 import type { DeepSummary, MarkType, PaperDetail } from '../types'
 
 const route = useRoute()
@@ -33,9 +34,10 @@ async function loadPaper() {
 
 watch(() => route.params.id, loadPaper, { immediate: true })
 
-// M6 标记 toggle：成功后局部更新，不整页刷新
+// M6 标记 toggle：成功后局部更新，不整页刷新（M9 需登录）
 async function toggleMark(type: MarkType) {
   if (!paper.value) return
+  if (!requireLogin()) return
   const next = !paper.value.marks[type]
   try {
     paper.value.marks = await setMark(paper.value.id, type, next)
@@ -46,6 +48,14 @@ async function toggleMark(type: MarkType) {
 
 function goRelated(id: number) {
   router.push(`/papers/${id}`)
+}
+
+// M9 标记需登录：未登录点击 → 提示并跳登录页
+function requireLogin(): boolean {
+  if (useAuthStore().isLoggedIn) return true
+  ElMessage.warning('请先登录后再使用收藏 / 已读 / 稍后读')
+  router.push({ path: '/login', query: { redirect: route.fullPath } })
+  return false
 }
 
 // M7 AI 深度摘要：按需生成（后端缓存复用）；生成中禁用按钮

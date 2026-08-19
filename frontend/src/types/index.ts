@@ -107,6 +107,27 @@ export interface TrendResponse {
 
 export type AggregateMode = 'day' | 'week' | 'month'
 
+// ---- M9 认证 ----
+
+export interface UserInfo {
+  id: number
+  username: string
+  email: string | null
+}
+
+export interface AuthResponse {
+  token: string
+  user: UserInfo
+}
+
+export interface ProfileStats {
+  username: string
+  email: string | null
+  counts: { bookmark: number; read: number; read_later: number }
+  topic_dist: { slug: string; name_zh: string; count: number }[]
+  recent: PaperListItem[]
+}
+
 // ---- M7 分析图表 ----
 
 export interface WordItem {

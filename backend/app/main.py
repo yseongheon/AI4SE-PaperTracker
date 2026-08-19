@@ -3,11 +3,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.auth import router as auth_router
 from app.api.export import router as export_router
 from app.api.health import router as health_router
 from app.api.papers import router as papers_router
 from app.api.stats import router as stats_router
 from app.api.topics import router as topics_router
+from app.api.users import router as users_router
 from app.api.venues import router as venues_router
 from app.crawler.scheduler import create_scheduler
 
@@ -29,11 +31,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.include_router(auth_router, prefix="/api")
 app.include_router(health_router, prefix="/api")
 app.include_router(papers_router, prefix="/api")
 app.include_router(topics_router, prefix="/api")
 app.include_router(venues_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
 
 

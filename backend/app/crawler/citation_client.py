@@ -8,6 +8,7 @@ api.semanticscholar.org 可达。用户拍板双源：
 """
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from urllib.parse import quote
@@ -39,8 +40,13 @@ class CitationClient:
 
     # ---- 缓存 ----
 
+    @staticmethod
+    def _safe_key(key: str) -> str:
+        """文件名安全化：Windows 文件名不能含 : / 等字符（doi:10.1145/... → doi_10_1145_...）。"""
+        return re.sub(r"[^\w.-]", "_", key)
+
     def _cache_path(self, key: str) -> Path:
-        return self.cache_dir / f"{key}.json"
+        return self.cache_dir / f"{self._safe_key(key)}.json"
 
     def _cache_get(self, key: str) -> int | None:
         path = self._cache_path(key)
@@ -58,8 +64,8 @@ class CitationClient:
             self._cache_path(key).write_text(
                 json.dumps({"cited_by_count": value}, ensure_ascii=False), encoding="utf-8"
             )
-        except OSError:
-            logger.warning("citation cache write failed (non-fatal): %s", key)
+        except OSError as exc:
+            logger.warning("citation cache write failed (non-fatal): %s (%s)", key, exc)
 
     # ---- Crossref（按 DOI） ----
 

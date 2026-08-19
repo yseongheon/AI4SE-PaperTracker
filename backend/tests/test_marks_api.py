@@ -1,4 +1,4 @@
-"""M6 个性化标记 API 测试：toggle 幂等、过滤参数、列表项 marks 集合（TestClient + 内存库）。"""
+"""M6+M9 个性化标记 API 测试：toggle 幂等、用户隔离、过滤参数、marks 集合（TestClient + 内存库）。"""
 from datetime import datetime
 
 import pytest
@@ -45,7 +45,22 @@ def client(monkeypatch):
     monkeypatch.setattr("app.db.SessionLocal", session)
     monkeypatch.setattr("app.main.create_scheduler", lambda: _DummyScheduler())
     with TestClient(app) as c:
+        # M9：注册用户拿 token（标记操作需登录）
+        r = c.post("/api/auth/register", json={
+            "username": "alice", "email": "alice@test.com", "password": "secret123",
+        })
+        assert r.status_code == 200
+        c.headers.update({"Authorization": f"Bearer {r.json()['token']}"})
         yield c
+
+
+# ---- 标记需登录 ----
+
+
+def test_mark_requires_login(client):
+    client.headers.pop("Authorization", None)  # 模拟未登录
+    r = client.post("/api/papers/1/marks", json={"type": "bookmark", "value": True})
+    assert r.status_code == 401
 
 
 def test_mark_roundtrip(client):
@@ -117,3 +132,31 @@ def test_detail_includes_marks_and_related(client):
     related_ids = {p["id"] for p in body["related"]}
     assert related_ids == {2, 3}
     assert all(p["id"] != 1 for p in body["related"])  # 排除自身
+
+
+# ---- M9：用户隔离 ----
+
+
+def test_marks_isolated_between_users(client):
+    """用户 A 的标记用户 B 不可见。"""
+    client.post("/api/papers/1/marks", json={"type": "bookmark", "value": True})
+
+    # 注册用户 B
+    r = client.post("/api/auth/register", json={
+        "username": "bob", "password": "secret456",
+    })
+    token_b = r.json()["token"]
+
+    r = client.get("/api/papers/1", headers={"Authorization": f"Bearer {token_b}"})
+    assert r.json()["marks"]["bookmark"] is False
+
+    r2 = client.get("/api/papers/1")  # 用户 A 自己仍可见
+    assert r2.json()["marks"]["bookmark"] is True
+
+
+def test_anonymous_sees_no_marks(client):
+    client.post("/api/papers/1/marks", json={"type": "bookmark", "value": True})
+
+    client.headers.pop("Authorization", None)  # 模拟未登录
+    r = client.get("/api/papers/1")
+    assert r.json()["marks"] == {"bookmark": False, "read": False, "read_later": False}

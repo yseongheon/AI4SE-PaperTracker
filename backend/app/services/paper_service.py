@@ -34,12 +34,16 @@ def pdf_url(arxiv_url: str | None) -> str | None:
     return arxiv_url.replace("/abs/", "/pdf/", 1)
 
 
-def _marks_map(db: Session, paper_ids: list[int]) -> dict[int, PaperMarks]:
-    """一次查询批量取标记（避免逐篇 N+1）。"""
+def _marks_map(
+    db: Session, paper_ids: list[int], user_id: int | None = None
+) -> dict[int, PaperMarks]:
+    """一次查询批量取标记（M9 按用户隔离；未登录返回空标记）。"""
     marks: dict[int, PaperMarks] = defaultdict(PaperMarks)
-    if not paper_ids:
+    if not paper_ids or user_id is None:
         return {}
-    for m in db.query(UserMark).filter(UserMark.paper_id.in_(paper_ids)):
+    for m in db.query(UserMark).filter(
+        UserMark.paper_id.in_(paper_ids), UserMark.user_id == user_id
+    ):
         setattr(marks[m.paper_id], m.mark_type, True)
     return dict(marks)
 
@@ -63,21 +67,21 @@ def _to_item(paper: Paper, marks: PaperMarks | None = None) -> PaperListItem:
     )
 
 
-def _apply_marks_filter(query, db: Session, marks: str | None):
-    """个性化标记过滤（M6）：bookmark/read_later 有标记；unread 无 read 标记。"""
+def _apply_marks_filter(query, db: Session, marks: str | None, user_id: int | None):
+    """个性化标记过滤（M6+M9）：bookmark/read_later 有标记；unread 无 read 标记。
+
+    未登录时：bookmark/read_later 恒空（查不到），unread 恒全（无任何已读标记）。
+    """
     if not marks:
         return query
+    base = db.query(UserMark).filter(UserMark.paper_id == Paper.id)
+    if user_id is not None:
+        base = base.filter(UserMark.user_id == user_id)
     if marks == "unread":
         return query.filter(
-            ~db.query(UserMark)
-            .filter(UserMark.paper_id == Paper.id, UserMark.mark_type == MarkType.READ.value)
-            .exists()
+            ~base.filter(UserMark.mark_type == MarkType.READ.value).exists()
         )
-    return query.filter(
-        db.query(UserMark)
-        .filter(UserMark.paper_id == Paper.id, UserMark.mark_type == marks)
-        .exists()
-    )
+    return query.filter(base.filter(UserMark.mark_type == marks).exists())
 
 
 def build_papers_query(
@@ -93,12 +97,13 @@ def build_papers_query(
     year_from: int | None = None,
     year_to: int | None = None,
     min_citations: int | None = None,
+    user_id: int | None = None,
 ):
-    """公共过滤构建器（M6+M7+M8）：列表与导出共用同一套过滤条件。
+    """公共过滤构建器（M6+M7+M8+M9）：列表与导出共用同一套过滤条件。
 
     field 指定 q 的搜索范围：any（标题+摘要）/ title / abstract；
     author 按作者姓名（归一化模糊匹配）过滤；year_from/year_to 年份区间；
-    min_citations（M8）只看引用数 ≥ N 的论文。
+    min_citations（M8）只看引用数 ≥ N 的论文；user_id（M9）标记过滤按用户隔离。
     """
     query = db.query(Paper)
 
@@ -139,13 +144,15 @@ def build_papers_query(
         query = query.filter(Paper.year == year)
     if is_ai4se is not None:
         query = query.filter(Paper.is_ai4se_confirmed.is_(is_ai4se))
-    return _apply_marks_filter(query, db, marks)
+    return _apply_marks_filter(query, db, marks, user_id)
 
 
-def items_from_query(db: Session, query) -> list[PaperListItem]:
+def items_from_query(
+    db: Session, query, user_id: int | None = None
+) -> list[PaperListItem]:
     """执行查询并组装列表项（含批量 marks 标记，避免 N+1）。导出与列表共用。"""
     papers = query.options(*_LIST_OPTIONS).all()
-    marks_map = _marks_map(db, [p.id for p in papers])
+    marks_map = _marks_map(db, [p.id for p in papers], user_id)
     return [_to_item(p, marks_map.get(p.id)) for p in papers]
 
 
@@ -165,11 +172,12 @@ def list_papers(
     year_from: int | None = None,
     year_to: int | None = None,
     min_citations: int | None = None,
+    user_id: int | None = None,
 ) -> tuple[list[PaperListItem], int]:
     """论文列表：过滤 + 排序 + 分页，返回 (items, total)。"""
     query = build_papers_query(
         db, q, topic, venue, year, is_ai4se, marks, author, field, year_from, year_to,
-        min_citations,
+        min_citations, user_id,
     )
 
     if sort == "citations":
@@ -190,15 +198,17 @@ def list_papers(
         )
 
     total = query.count()
-    items = items_from_query(db, query.offset((page - 1) * page_size).limit(page_size))
+    items = items_from_query(
+        db, query.offset((page - 1) * page_size).limit(page_size), user_id
+    )
     return items, total
 
 
-def get_paper(db: Session, paper_id: int) -> PaperDetail:
+def get_paper(db: Session, paper_id: int, user_id: int | None = None) -> PaperDetail:
     paper = db.get(Paper, paper_id, options=_LIST_OPTIONS)
     if paper is None:
         raise HTTPException(status_code=404, detail=f"paper {paper_id} not found")
-    marks_map = _marks_map(db, [paper_id])
+    marks_map = _marks_map(db, [paper_id], user_id)
     item = _to_item(paper, marks_map.get(paper_id))
     return PaperDetail(
         **item.model_dump(),
@@ -210,18 +220,20 @@ def get_paper(db: Session, paper_id: int) -> PaperDetail:
         is_ai4se_candidate=paper.is_ai4se_candidate,
         match_status=paper.match_status,
         status=paper.status,
-        related=related_papers(db, paper),
+        related=related_papers(db, paper, user_id=user_id),
     )
 
 
 # ---- M7：单篇 BibTeX / AI 深度摘要 ----
 
-def paper_item(db: Session, paper_id: int) -> PaperListItem:
+def paper_item(
+    db: Session, paper_id: int, user_id: int | None = None
+) -> PaperListItem:
     """单篇列表项（含 marks），404 处理；导出/复制场景用。"""
     paper = db.get(Paper, paper_id, options=_LIST_OPTIONS)
     if paper is None:
         raise HTTPException(status_code=404, detail=f"paper {paper_id} not found")
-    return _to_item(paper, _marks_map(db, [paper_id]).get(paper_id))
+    return _to_item(paper, _marks_map(db, [paper_id], user_id).get(paper_id))
 
 
 def get_deep_summary(db: Session, paper_id: int) -> dict:
@@ -246,19 +258,25 @@ def get_deep_summary(db: Session, paper_id: int) -> dict:
 
 # ---- M6：个性化标记 ----
 
-def set_mark(db: Session, paper_id: int, mark_type: str, value: bool) -> PaperMarks:
-    """设置/取消标记（幂等）：value=True 插入、False 删除。"""
+def set_mark(
+    db: Session, paper_id: int, mark_type: str, value: bool, user_id: int
+) -> PaperMarks:
+    """设置/取消标记（幂等，M9 按用户隔离）：value=True 插入、False 删除。"""
     paper = db.get(Paper, paper_id)
     if paper is None:
         raise HTTPException(status_code=404, detail=f"paper {paper_id} not found")
-    existing = db.query(UserMark).filter_by(paper_id=paper_id, mark_type=mark_type).first()
+    existing = (
+        db.query(UserMark)
+        .filter_by(user_id=user_id, paper_id=paper_id, mark_type=mark_type)
+        .first()
+    )
     if value and existing is None:
-        db.add(UserMark(paper_id=paper_id, mark_type=mark_type))
+        db.add(UserMark(user_id=user_id, paper_id=paper_id, mark_type=mark_type))
     elif not value and existing is not None:
         db.delete(existing)
     db.commit()
     # 全部标记被取消时 _marks_map 无该论文 key，用 get 兜底
-    return _marks_map(db, [paper_id]).get(paper_id, PaperMarks())
+    return _marks_map(db, [paper_id], user_id).get(paper_id, PaperMarks())
 
 
 # ---- M6：相关论文推荐 ----
@@ -274,7 +292,9 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
-def related_papers(db: Session, paper: Paper, limit: int = 5) -> list[PaperListItem]:
+def related_papers(
+    db: Session, paper: Paper, limit: int = 5, user_id: int | None = None
+) -> list[PaperListItem]:
     """相关论文推荐：同主题论文池 → 标题 token Jaccard 相似度排序 → Top N。
 
     无同主题时退回同 venue 池；再退回同 year 池（保底不空）。
@@ -318,5 +338,5 @@ def related_papers(db: Session, paper: Paper, limit: int = 5) -> list[PaperListI
         ),
         reverse=True,
     )
-    marks_map = _marks_map(db, [p.id for p in ranked[:limit]])
+    marks_map = _marks_map(db, [p.id for p in ranked[:limit]], user_id)
     return [_to_item(p, marks_map.get(p.id)) for p in ranked[:limit]]

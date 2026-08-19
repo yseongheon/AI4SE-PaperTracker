@@ -44,6 +44,20 @@ def run_weekly_report_job() -> None:
         db.close()
 
 
+def run_personal_report_job() -> None:
+    """每周五个人收藏周报执行体（M9）：为每个有收藏的用户生成。"""
+    db = SessionLocal()
+    try:
+        from scripts.personal_report import generate_personal_reports
+
+        written = generate_personal_reports(db)
+        logger.info("personal reports generated: %d users", len(written))
+    except Exception:
+        logger.exception("scheduled personal report failed")
+    finally:
+        db.close()
+
+
 def create_scheduler() -> BackgroundScheduler:
     utc_hour = (settings.crawl_schedule_hour - _BEIJING_OFFSET_HOURS) % 24
     scheduler = BackgroundScheduler(timezone="UTC")
@@ -53,7 +67,7 @@ def create_scheduler() -> BackgroundScheduler:
         id="daily_crawl",
         replace_existing=True,
     )
-    # M6 周报：每周五 09:30 北京时间 = UTC 周五 01:30
+    # M6 周报 + M9 个人周报：每周五 09:30 北京时间 = UTC 周五 01:30
     scheduler.add_job(
         run_weekly_report_job,
         CronTrigger(
@@ -62,6 +76,16 @@ def create_scheduler() -> BackgroundScheduler:
             day_of_week="fri",
         ),
         id="weekly_report",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_personal_report_job,
+        CronTrigger(
+            hour=(_WEEKLY_REPORT_HOUR_BJ - _BEIJING_OFFSET_HOURS) % 24,
+            minute=(_WEEKLY_REPORT_MINUTE_BJ + 5) % 60,
+            day_of_week="fri",
+        ),
+        id="personal_report",
         replace_existing=True,
     )
     logger.info(

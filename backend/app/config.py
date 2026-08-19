@@ -24,5 +24,8 @@ class Settings(BaseSettings):
     crawl_schedule_hour: int = 9
     crawl_schedule_minute: int = 30
 
+    # M9 认证：HMAC token 签名密钥（.env 配置；默认仅用于本地开发）
+    auth_secret: str = "dev-secret-change-in-env"
+
 
 settings = Settings()

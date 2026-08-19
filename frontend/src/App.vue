@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getHealth } from './api/health'
+import { useAuthStore } from './stores/authStore'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 const backendOk = ref<boolean | null>(null)
 
 onMounted(async () => {
@@ -14,6 +17,11 @@ onMounted(async () => {
     backendOk.value = false
   }
 })
+
+function logout() {
+  auth.logout()
+  router.push('/')
+}
 </script>
 
 <template>
@@ -26,7 +34,21 @@ onMounted(async () => {
       <el-menu router :default-active="route.path" class="menu">
         <el-menu-item index="/">论文列表</el-menu-item>
         <el-menu-item index="/trend">主题趋势</el-menu-item>
+        <el-menu-item v-if="auth.isLoggedIn" index="/profile">个人画像</el-menu-item>
       </el-menu>
+      <div class="aside-user">
+        <template v-if="auth.isLoggedIn">
+          <div class="user-name" :title="auth.user?.email || ''">
+            👤 {{ auth.user?.username }}
+          </div>
+          <el-button size="small" text class="logout" @click="logout">退出登录</el-button>
+        </template>
+        <template v-else>
+          <el-button size="small" type="primary" class="login-btn" @click="router.push('/login')">
+            登录 / 注册
+          </el-button>
+        </template>
+      </div>
       <div class="aside-foot">CCF-A SE Venues<br />ICSE · FSE · ASE · ISSTA</div>
     </el-aside>
     <el-container>
@@ -109,6 +131,29 @@ onMounted(async () => {
   color: rgba(255, 255, 255, 0.42);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   letter-spacing: 0.03em;
+}
+.aside-user {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.logout {
+  color: rgba(255, 255, 255, 0.6);
+  width: fit-content;
+  padding: 0;
+}
+.login-btn {
+  width: 100%;
 }
 
 /* ---- 页头 ---- */

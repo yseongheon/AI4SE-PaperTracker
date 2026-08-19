@@ -6,6 +6,7 @@ from app.models.keyword_rule import KeywordRule
 from app.models.mark import MarkType, UserMark
 from app.models.paper import MatchStatus, Paper, PaperAuthor, PaperStatus
 from app.models.topic import PaperTopic, Topic
+from app.models.user import User
 from app.models.venue import Venue
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "PaperStatus",
     "PaperTopic",
     "Topic",
+    "User",
     "UserMark",
     "Venue",
 ]

@@ -1,10 +1,11 @@
-"""论文列表/详情/个性化标记/单篇 BibTeX/AI 深度摘要接口（M3 + M6 + M7）。"""
+"""论文列表/详情/个性化标记/单篇 BibTeX/AI 深度摘要接口（M3 + M6 + M7 + M9）。"""
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.models import User
 from app.schemas.paper import MarkRequest, PaperDetail, PaperMarks, PaperPage
-from app.services import export_service, paper_service
+from app.services import auth_service, export_service, paper_service
 
 router = APIRouter(prefix="/papers", tags=["papers"])
 
@@ -29,23 +30,34 @@ def list_papers(
     min_citations: int | None = Query(None, ge=0, description="M8 只看引用数 ≥ N 的论文"),
     sort: str = Query("newest", pattern="^(newest|venue|citations)$", description="newest=按时间倒序；venue=会议版优先；citations=按被引量"),
     db: Session = Depends(get_db),
+    user: User | None = Depends(auth_service.get_optional_user),  # M9 标记按用户隔离
 ) -> PaperPage:
     items, total = paper_service.list_papers(
         db, page, page_size, q, topic, venue, year, is_ai4se, marks, sort,
         author, field, year_from, year_to, min_citations,
+        user.id if user else None,
     )
     return PaperPage(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/{paper_id}", response_model=PaperDetail)
-def get_paper(paper_id: int, db: Session = Depends(get_db)) -> PaperDetail:
-    return paper_service.get_paper(db, paper_id)
+def get_paper(
+    paper_id: int,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(auth_service.get_optional_user),
+) -> PaperDetail:
+    return paper_service.get_paper(db, paper_id, user.id if user else None)
 
 
 @router.post("/{paper_id}/marks", response_model=PaperMarks)
-def toggle_mark(paper_id: int, req: MarkRequest, db: Session = Depends(get_db)) -> PaperMarks:
-    """设置/取消个性化标记（幂等）：收藏 / 已读 / 稍后读。"""
-    return paper_service.set_mark(db, paper_id, req.type, req.value)
+def toggle_mark(
+    paper_id: int,
+    req: MarkRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(auth_service.get_current_user),  # M9 标记需登录
+) -> PaperMarks:
+    """设置/取消个性化标记（幂等，需登录）：收藏 / 已读 / 稍后读。"""
+    return paper_service.set_mark(db, paper_id, req.type, req.value, user.id)
 
 
 @router.get("/{paper_id}/bibtex")
