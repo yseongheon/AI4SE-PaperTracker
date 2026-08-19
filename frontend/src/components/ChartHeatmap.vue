@@ -66,6 +66,6 @@ const option = computed(() => ({
   width: 100%;
 }
 .chart {
-  height: 420px;
+  height: 520px; /* M7 拍板：全宽大图 */
 }
 </style>
