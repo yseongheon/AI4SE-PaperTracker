@@ -124,3 +124,56 @@ def test_profile_with_token(client):
     assert r.status_code == 200
     assert r.json()["username"] == "alice"
     assert r.json()["counts"] == {"bookmark": 0, "read": 0, "read_later": 0}
+
+
+# ---- M9 反馈：资料修改 ----
+
+
+def _auth_headers(reg_resp):
+    return {"Authorization": f"Bearer {reg_resp.json()['token']}"}
+
+
+def test_update_profile_username_and_email(client):
+    reg = client.post("/api/auth/register", json={
+        "username": "alice", "password": "secret123",
+    })
+    h = _auth_headers(reg)
+
+    r = client.patch("/api/users/me", json={"username": "alice2", "email": "new@test.com"}, headers=h)
+    assert r.status_code == 200
+    assert r.json() == {"id": 1, "username": "alice2", "email": "new@test.com"}
+
+    # 新用户名可登录
+    r2 = client.post("/api/auth/login", json={"username": "alice2", "password": "secret123"})
+    assert r2.status_code == 200
+
+
+def test_update_profile_username_conflict(client):
+    reg1 = client.post("/api/auth/register", json={"username": "alice", "password": "secret123"})
+    client.post("/api/auth/register", json={"username": "bob", "password": "secret123"})
+
+    # alice 想改成 bob（已被占用）→ 409
+    r = client.patch("/api/users/me", json={"username": "bob"}, headers=_auth_headers(reg1))
+    assert r.status_code == 409
+
+
+def test_update_password_requires_old(client):
+    reg = client.post("/api/auth/register", json={
+        "username": "alice", "password": "secret123",
+    })
+    h = _auth_headers(reg)
+
+    r = client.post("/api/users/me/password",
+                    json={"old_password": "wrong", "new_password": "newpass123"}, headers=h)
+    assert r.status_code == 401
+
+    r2 = client.post("/api/users/me/password",
+                     json={"old_password": "secret123", "new_password": "newpass123"}, headers=h)
+    assert r2.status_code == 200
+    assert r2.json() == {"ok": True}
+
+    # 旧密码失效、新密码可登录
+    assert client.post("/api/auth/login",
+                       json={"username": "alice", "password": "secret123"}).status_code == 401
+    assert client.post("/api/auth/login",
+                       json={"username": "alice", "password": "newpass123"}).status_code == 200

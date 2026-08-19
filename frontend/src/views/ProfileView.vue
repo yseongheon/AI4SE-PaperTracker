@@ -1,13 +1,15 @@
 <script setup lang="ts">
-// M9 个人画像页（需登录）：标记统计 + 收藏主题分布 + 最近收藏
+// M9 个人画像页（需登录）：标记统计 + 收藏主题分布 + 最近收藏 + 账号设置
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getProfile } from '../api/users'
+import { getProfile, updatePassword, updateProfile } from '../api/users'
 import TopicTag from '../components/TopicTag.vue'
+import { useAuthStore } from '../stores/authStore'
 import type { ProfileStats } from '../types'
 
 const router = useRouter()
+const auth = useAuthStore()
 const profile = ref<ProfileStats | null>(null)
 const loading = ref(true)
 
@@ -25,12 +27,77 @@ onMounted(async () => {
 function goPaper(id: number) {
   router.push(`/papers/${id}`)
 }
+
+// ---- M9 反馈：账号设置 ----
+
+const profileDialog = ref(false)
+const profileForm = ref({ username: '', email: '' })
+const profileSaving = ref(false)
+
+function openProfileDialog() {
+  profileForm.value = {
+    username: profile.value?.username || '',
+    email: profile.value?.email || '',
+  }
+  profileDialog.value = true
+}
+
+async function saveProfile() {
+  profileSaving.value = true
+  try {
+    const user = await updateProfile({
+      username: profileForm.value.username.trim(),
+      email: profileForm.value.email.trim() || null,
+    })
+    auth.user = user
+    localStorage.setItem('auth_user', JSON.stringify(user))
+    if (profile.value) profile.value.username = user.username
+    ElMessage.success('资料已更新')
+    profileDialog.value = false
+  } catch (e) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '保存失败')
+  } finally {
+    profileSaving.value = false
+  }
+}
+
+const pwdDialog = ref(false)
+const pwdForm = ref({ old: '', next: '', confirm: '' })
+const pwdSaving = ref(false)
+
+async function savePassword() {
+  if (!pwdForm.value.old || !pwdForm.value.next) {
+    ElMessage.warning('请填写完整')
+    return
+  }
+  if (pwdForm.value.next !== pwdForm.value.confirm) {
+    ElMessage.warning('两次新密码不一致')
+    return
+  }
+  pwdSaving.value = true
+  try {
+    await updatePassword(pwdForm.value.old, pwdForm.value.next)
+    ElMessage.success('密码已修改')
+    pwdDialog.value = false
+    pwdForm.value = { old: '', next: '', confirm: '' }
+  } catch (e) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '修改失败')
+  } finally {
+    pwdSaving.value = false
+  }
+}
 </script>
 
 <template>
   <div v-loading="loading" class="profile-page">
     <template v-if="profile">
-      <h2 class="page-title">{{ profile.username }} 的阅读画像</h2>
+      <h2 class="page-title">
+        {{ profile.username }} 的阅读画像
+        <el-button size="small" @click="openProfileDialog">修改资料</el-button>
+        <el-button size="small" @click="pwdDialog = true">修改密码</el-button>
+      </h2>
 
       <!-- 统计卡片 -->
       <div class="stats">
@@ -84,6 +151,42 @@ function goPaper(id: number) {
         </ul>
         <p v-else class="empty">暂无收藏</p>
       </el-card>
+
+      <!-- M9 反馈：账号设置对话框 -->
+      <el-dialog v-model="profileDialog" title="修改资料" width="420px">
+        <el-form label-position="top">
+          <el-form-item label="用户名">
+            <el-input v-model="profileForm.username" placeholder="2-64 位，字母数字.-_">
+            </el-input>
+          </el-form-item>
+          <el-form-item label="邮箱（可选）">
+            <el-input v-model="profileForm.email" placeholder="user@example.com" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="profileDialog = false">取消</el-button>
+          <el-button type="primary" :loading="profileSaving" @click="saveProfile">保存</el-button>
+        </template>
+      </el-dialog>
+
+      <el-dialog v-model="pwdDialog" title="修改密码" width="420px">
+        <el-form label-position="top">
+          <el-form-item label="当前密码">
+            <el-input v-model="pwdForm.old" type="password" show-password />
+          </el-form-item>
+          <el-form-item label="新密码（至少 6 位）">
+            <el-input v-model="pwdForm.next" type="password" show-password />
+          </el-form-item>
+          <el-form-item label="确认新密码">
+            <el-input v-model="pwdForm.confirm" type="password" show-password
+                      @keyup.enter="savePassword" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="pwdDialog = false">取消</el-button>
+          <el-button type="primary" :loading="pwdSaving" @click="savePassword">确认修改</el-button>
+        </template>
+      </el-dialog>
     </template>
   </div>
 </template>
@@ -97,6 +200,9 @@ function goPaper(id: number) {
 .page-title {
   font-size: 20px;
   margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .stats {
   display: flex;

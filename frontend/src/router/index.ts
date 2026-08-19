@@ -25,20 +25,24 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue'),
-      meta: { title: '登录' },
+      meta: { title: '登录', public: true },
     },
     {
       path: '/profile',
       name: 'profile',
       component: () => import('../views/ProfileView.vue'),
-      meta: { title: '个人画像', requiresAuth: true },
+      meta: { title: '个人画像' },
     },
   ],
 })
 
-// M9 路由守卫：requiresAuth 页面未登录跳登录页（带 redirect 回跳）
+// M9 路由守卫：课题组工具，全站登录墙（未登录访问任何页面 → 登录页，带 redirect 回跳）
 router.beforeEach((to) => {
-  if (to.meta.requiresAuth && !localStorage.getItem('auth_token')) {
+  const loggedIn = !!localStorage.getItem('auth_token')
+  if (to.path === '/login' && loggedIn) {
+    return '/'
+  }
+  if (!to.meta.public && !loggedIn) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
 })
