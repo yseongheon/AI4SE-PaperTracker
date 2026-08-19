@@ -1,15 +1,18 @@
-"""统计服务（M3）：主题/会议计数、趋势时间序列（DR-020）。
+"""统计服务（M3+M7）：主题/会议计数、趋势时间序列（DR-020）、词云/作者榜/热力图/合作网络。
 
 趋势设计（用户拍板）：后端按天返回原始计数，聚合粒度（周/月）由前端决定；
 group_by=topic|venue 时横轴为连续日期（缺省日补 0），group_by=year 时为年份。
+M7 分析端点全部基于本地数据计算（零外部 API 成本）。
 """
+import re
+from collections import Counter, defaultdict
 from datetime import date, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import Integer, cast, func
 from sqlalchemy.orm import Session
 
-from app.models import Paper, PaperTopic, Topic, Venue
+from app.models import Author, Paper, PaperAuthor, PaperTopic, Topic, Venue
 
 
 def topic_counts(db: Session) -> list[dict]:
@@ -151,3 +154,143 @@ def trends(
         "labels": labels,
         "series": series,
     }
+
+
+# ---- M7：分析增强（词云 / 作者榜 / 热力图 / 合作网络） ----
+
+# 英文停用词（arXiv 摘要高频无意义词）+ 过滤规则：长度 <3、纯数字
+_STOPWORDS = {
+    "the", "a", "an", "of", "and", "or", "in", "on", "at", "to", "for", "with",
+    "from", "by", "as", "is", "are", "was", "were", "be", "been", "being", "we",
+    "our", "us", "their", "its", "this", "that", "these", "those", "it", "they",
+    "he", "she", "them", "his", "her", "which", "who", "whom", "whose", "not",
+    "no", "but", "however", "while", "although", "though", "can", "could", "may",
+    "might", "must", "will", "would", "should", "shall", "than", "then", "there",
+    "here", "where", "when", "why", "how", "what", "all", "both", "each", "few",
+    "more", "most", "other", "some", "such", "only", "own", "same", "so", "too",
+    "very", "just", "also", "often", "even", "well", "one", "two", "first",
+    "second", "new", "use", "used", "using", "based", "using", "proposed",
+    "propose", "approach", "paper", "results", "result", "show", "shows",
+    "shown", "found", "find", "method", "methods", "system", "systems",
+    "within", "between", "over", "under", "about", "via", "against", "across",
+    "per", "etc", "e.g", "i.e", "et", "al", "doi", "http", "https", "ieee",
+    "acm", "arxiv", "cs", "se", "software", "data", "study", "studies",
+}
+_WORD_RE = re.compile(r"[a-z]{3,}")
+
+
+def words(db: Session, limit: int = 50, scope: str = "ai4se") -> dict:
+    """词云高频词：摘要英文词频（停用词过滤），scope=ai4se 只看已确认论文。"""
+    query = db.query(Paper.abstract)
+    if scope == "ai4se":
+        query = query.filter(Paper.is_ai4se_confirmed.is_(True))
+    counter: Counter[str] = Counter()
+    for (abstract,) in query.yield_per(500):
+        if not abstract:
+            continue
+        for word in _WORD_RE.findall(abstract.lower()):
+            if word not in _STOPWORDS:
+                counter[word] += 1
+    top = counter.most_common(limit)
+    return {
+        "scope": scope,
+        "words": [{"word": w, "count": c} for w, c in top],
+    }
+
+
+def authors_top(db: Session, limit: int = 50) -> dict:
+    """作者 TOP 榜：论文数 + AI4SE 论文数 + 主要主题（按论文数降序）。"""
+    rows = (
+        db.query(
+            Author.id,
+            Author.name,
+            func.count(func.distinct(PaperAuthor.paper_id)).label("paper_count"),
+            func.sum(cast(Paper.is_ai4se_confirmed, Integer)).label("ai4se_count"),
+        )
+        .join(PaperAuthor, PaperAuthor.author_id == Author.id)
+        .join(Paper, Paper.id == PaperAuthor.paper_id)
+        .group_by(Author.id, Author.name)
+        .order_by(func.count(func.distinct(PaperAuthor.paper_id)).desc(), Author.id)
+        .limit(limit)
+        .all()
+    )
+    author_ids = [r[0] for r in rows]
+    # 一次查询取这批作者的论文主题分布（Python 分组，避免 N+1）
+    topic_rows = (
+        db.query(PaperAuthor.author_id, Topic.slug, Topic.name_zh, func.count(PaperTopic.paper_id))
+        .join(PaperTopic, PaperTopic.paper_id == PaperAuthor.paper_id)
+        .join(Topic, Topic.id == PaperTopic.topic_id)
+        .filter(PaperAuthor.author_id.in_(author_ids))
+        .group_by(PaperAuthor.author_id, Topic.slug, Topic.name_zh)
+        .order_by(PaperAuthor.author_id, func.count(PaperTopic.paper_id).desc())
+        .all()
+    )
+    by_author: dict[int, list[dict]] = defaultdict(list)
+    for aid, slug, name_zh, cnt in topic_rows:
+        by_author[aid].append({"slug": slug, "name_zh": name_zh, "count": cnt})
+    return {
+        "authors": [
+            {
+                "id": aid,
+                "name": name,
+                "paper_count": cnt,
+                "ai4se_count": int(ai4se or 0),
+                "top_topics": by_author.get(aid, [])[:3],
+            }
+            for aid, name, cnt, ai4se in rows
+        ]
+    }
+
+
+def cross(db: Session) -> dict:
+    """会议×主题交叉矩阵（热力图）：venues 行 × topics 列。"""
+    rows = (
+        db.query(Venue.short_name, Topic.slug, func.count(Paper.id))
+        .join(Paper, Paper.venue_id == Venue.id)
+        .join(PaperTopic, PaperTopic.paper_id == Paper.id)
+        .join(Topic, Topic.id == PaperTopic.topic_id)
+        .group_by(Venue.short_name, Topic.slug)
+        .all()
+    )
+    venues = sorted({r[0] for r in rows})
+    topics = sorted({r[1] for r in rows})
+    matrix = [[0] * len(topics) for _ in venues]
+    for v, t, cnt in rows:
+        matrix[venues.index(v)][topics.index(t)] = cnt
+    return {"venues": venues, "topics": topics, "matrix": matrix}
+
+
+def coauthor(db: Session, limit: int = 100) -> dict:
+    """作者合作网络：TOP N 活跃作者共著边（weight=共著论文数）。"""
+    # TOP N 活跃作者（按论文数）
+    top = (
+        db.query(Author.id, Author.name, func.count(func.distinct(PaperAuthor.paper_id)).label("c"))
+        .join(PaperAuthor, PaperAuthor.author_id == Author.id)
+        .group_by(Author.id, Author.name)
+        .order_by(func.count(func.distinct(PaperAuthor.paper_id)).desc(), Author.id)
+        .limit(limit)
+        .all()
+    )
+    nodes = [{"id": aid, "name": name, "paper_count": c} for aid, name, c in top]
+    ids = [aid for aid, _, _ in top]
+    if not ids:
+        return {"nodes": [], "links": []}
+
+    # 每作者的论文 id 集
+    rows = (
+        db.query(PaperAuthor.author_id, PaperAuthor.paper_id)
+        .filter(PaperAuthor.author_id.in_(ids))
+        .all()
+    )
+    papers_of: dict[int, set[int]] = defaultdict(set)
+    for aid, pid in rows:
+        papers_of[aid].add(pid)
+    # 两两交集 → 共著权重（只保留有共著的边）
+    links = []
+    for i, aid in enumerate(ids):
+        for bid in ids[i + 1:]:
+            w = len(papers_of[aid] & papers_of[bid])
+            if w:
+                links.append({"source": aid, "target": bid, "weight": w})
+    links.sort(key=lambda e: e["weight"], reverse=True)
+    return {"nodes": nodes, "links": links}

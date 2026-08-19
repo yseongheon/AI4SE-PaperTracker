@@ -1,0 +1,156 @@
+"""M7 分析端点测试：词云/作者榜/交叉矩阵/合作网络（离线，内存 SQLite）。"""
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.models import Author, Base, Paper, PaperAuthor, PaperTopic, Topic, Venue
+from app.services import stats_service
+
+
+@pytest.fixture()
+def db():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    yield session
+    session.close()
+
+
+def add_paper(db, title, abstract, *, topics=(), venue=None, confirmed=True, year=2026,
+              authors=()):
+    p = Paper(
+        title=title, title_normalized=title.lower(), abstract=abstract,
+        year=year, is_ai4se_confirmed=confirmed, venue=venue, status="classified",
+    )
+    db.add(p)
+    db.flush()
+    for slug in topics:
+        t = db.query(Topic).filter_by(slug=slug).first()
+        if t is None:
+            t = Topic(slug=slug, name_zh=slug)
+            db.add(t)
+            db.flush()
+        db.add(PaperTopic(paper_id=p.id, topic_id=t.id, method="llm"))
+    for i, name in enumerate(authors):
+        a = db.query(Author).filter_by(name_normalized=name.lower()).first()
+        if a is None:
+            a = Author(name=name, name_normalized=name.lower())
+            db.add(a)
+            db.flush()
+        db.add(PaperAuthor(paper_id=p.id, author_id=a.id, position=i))
+    return p
+
+
+# ---- 词云 ----
+
+
+def test_words_filters_stopwords_and_short(db):
+    add_paper(db, "A", "The LLM framework for software testing and repair of code bugs")
+    add_paper(db, "B", "We study the abstract analysis", confirmed=False)  # 非 AI4SE 不进默认 scope
+    db.commit()
+
+    result = stats_service.words(db, limit=50, scope="ai4se")
+
+    words = {w["word"] for w in result["words"]}
+    assert "llm" in words
+    assert "testing" in words and "repair" in words
+    assert "the" not in words  # 停用词过滤
+    assert "of" not in words
+    assert "we" not in words
+    assert "study" not in words  # 停用词
+    assert "analysis" not in words  # 非 AI4SE 论文的摘要不参与
+
+
+def test_words_scope_all(db):
+    add_paper(db, "A", "LLM for testing", confirmed=True)
+    add_paper(db, "B", "LLM for analysis", confirmed=False)
+    db.commit()
+
+    assert stats_service.words(db, scope="all")["words"][0]["word"] == "llm"
+    all_words = {w["word"] for w in stats_service.words(db, scope="all")["words"]}
+    assert "analysis" in all_words
+
+
+# ---- 作者榜 ----
+
+
+def test_authors_top_aggregates(db):
+    add_paper(db, "P1", "a", authors=("Alice Zhang", "Bob Li"))
+    add_paper(db, "P2", "b", authors=("Alice Zhang",))
+    add_paper(db, "P3", "c", authors=("Bob Li",), confirmed=False)
+    db.commit()
+
+    result = stats_service.authors_top(db, limit=10)
+
+    by_name = {a["name"]: a for a in result["authors"]}
+    assert by_name["Alice Zhang"]["paper_count"] == 2
+    assert by_name["Alice Zhang"]["ai4se_count"] == 2
+    assert by_name["Bob Li"]["paper_count"] == 2
+    assert by_name["Bob Li"]["ai4se_count"] == 1  # P3 非 AI4SE
+    assert result["authors"][0]["name"] == "Alice Zhang"  # 论文数降序
+
+
+def test_authors_top_topics(db):
+    add_paper(db, "P1", "a", topics=("code_repair", "testing"), authors=("Alice Zhang",))
+    add_paper(db, "P2", "b", topics=("code_repair",), authors=("Alice Zhang",))
+    db.commit()
+
+    result = stats_service.authors_top(db, limit=10)
+
+    alice = result["authors"][0]
+    assert alice["top_topics"][0]["slug"] == "code_repair"  # 频次最高的主题在前
+    assert len(alice["top_topics"]) == 2
+
+
+# ---- 会议×主题矩阵 ----
+
+
+def test_cross_matrix_shape(db):
+    icse = Venue(short_name="ICSE", full_name="ICSE", type="conference", rank="A")
+    fse = Venue(short_name="FSE", full_name="FSE", type="conference", rank="A")
+    db.add_all([icse, fse])
+    db.commit()
+    add_paper(db, "P1", "a", topics=("code_repair",), venue=icse)
+    add_paper(db, "P2", "b", topics=("testing",), venue=icse)
+    add_paper(db, "P3", "c", topics=("code_repair",), venue=fse)
+    db.commit()
+
+    result = stats_service.cross(db)
+
+    assert result["venues"] == ["FSE", "ICSE"]
+    assert set(result["topics"]) == {"code_repair", "testing"}
+    matrix = dict(zip(result["venues"], result["matrix"]))
+    assert matrix["ICSE"][result["topics"].index("code_repair")] == 1
+    assert matrix["ICSE"][result["topics"].index("testing")] == 1
+    assert matrix["FSE"][result["topics"].index("code_repair")] == 1
+
+
+# ---- 合作网络 ----
+
+
+def test_coauthor_links_weight(db):
+    add_paper(db, "P1", "a", authors=("A", "B"))
+    add_paper(db, "P2", "b", authors=("A", "B"))
+    add_paper(db, "P3", "c", authors=("A", "C"))
+    add_paper(db, "P4", "d", authors=("D", "E", "F"))
+    db.commit()
+
+    result = stats_service.coauthor(db, limit=100)
+
+    nodes = {n["name"]: n for n in result["nodes"]}
+    assert nodes["A"]["paper_count"] == 3
+    weights = {(l["source"], l["target"]): l["weight"] for l in result["links"]}
+    # A-B 共著 2 篇；A-C 共著 1 篇；D/E/F 无共著（不同论文）→ 无边
+    ab = max(w for (a, b), w in weights.items() if (a, b) in ((1, 2), (2, 1)))
+    assert ab == 2
+    assert len(result["links"]) >= 2  # A-B、A-C
+
+
+def test_coauthor_limit_trims_nodes(db):
+    for i in range(5):
+        add_paper(db, f"P{i}", "a", authors=(f"Author{i}",))
+    db.commit()
+
+    result = stats_service.coauthor(db, limit=3)
+
+    assert len(result["nodes"]) == 3

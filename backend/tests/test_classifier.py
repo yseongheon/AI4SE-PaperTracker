@@ -103,7 +103,11 @@ def test_cost_accumulates(monkeypatch, tmp_path):
     assert tracker.calls == 1
 
 
-def test_cost_limit_raises(monkeypatch):
+def test_cost_limit_raises(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "app.crawler.classifier.CostTracker._state_file",
+        lambda self: tmp_path / "llm_cost.json",
+    )
     monkeypatch.setattr("app.crawler.classifier.settings.llm_price_input_usd_per_1m", 0.27)
     monkeypatch.setattr("app.crawler.classifier.settings.llm_price_output_usd_per_1m", 1.10)
     tracker = CostTracker(limit_usd=1.0)

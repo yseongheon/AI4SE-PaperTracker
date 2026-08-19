@@ -76,6 +76,9 @@ class Paper(Base):
     highlights: Mapped[dict | None] = mapped_column(  # LLM 亮点速读 {contribution, limitation}
         JSON, nullable=True, default=None
     )
+    deep_summary: Mapped[dict | None] = mapped_column(  # M7 AI 深度摘要（按需生成后缓存）
+        JSON, nullable=True, default=None
+    )
     status: Mapped[str] = mapped_column(String(16), default=PaperStatus.FETCHED.value)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

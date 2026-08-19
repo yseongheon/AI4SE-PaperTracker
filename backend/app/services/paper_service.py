@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import MarkType, Paper, PaperAuthor, PaperTopic, Topic, UserMark, Venue
+from app.models import Author, MarkType, Paper, PaperAuthor, PaperTopic, Topic, UserMark, Venue
 from app.schemas.paper import Highlights, PaperDetail, PaperListItem, PaperMarks
 
 # 列表/详情共用 eager load，避免 N+1（作者、主题、会议）
@@ -25,6 +25,13 @@ _LIST_OPTIONS = (
 def dblp_url(dblp_key: str | None) -> str | None:
     """DBLP 收录页 URL（双链接之一）；无匹配返回 None。"""
     return f"https://dblp.org/rec/{dblp_key}.html" if dblp_key else None
+
+
+def pdf_url(arxiv_url: str | None) -> str | None:
+    """arXiv PDF 直链：/abs/xxx → /pdf/xxx（M7 科研刚需）。"""
+    if not arxiv_url:
+        return None
+    return arxiv_url.replace("/abs/", "/pdf/", 1)
 
 
 def _marks_map(db: Session, paper_ids: list[int]) -> dict[int, PaperMarks]:
@@ -48,6 +55,7 @@ def _to_item(paper: Paper, marks: PaperMarks | None = None) -> PaperListItem:
         published_at=paper.published_at.date() if paper.published_at else None,
         is_ai4se_confirmed=paper.is_ai4se_confirmed,
         arxiv_url=paper.arxiv_url,
+        pdf_url=pdf_url(paper.arxiv_url),
         dblp_url=dblp_url(paper.dblp_key),
         doi=paper.doi,
         marks=marks or PaperMarks(),
@@ -79,15 +87,37 @@ def build_papers_query(
     year: int | None = None,
     is_ai4se: bool | None = None,
     marks: str | None = None,
+    author: str | None = None,
+    field: str = "any",
+    year_from: int | None = None,
+    year_to: int | None = None,
 ):
-    """公共过滤构建器（M6）：列表与导出共用同一套过滤条件。"""
+    """公共过滤构建器（M6+M7）：列表与导出共用同一套过滤条件。
+
+    field 指定 q 的搜索范围：any（标题+摘要）/ title / abstract；
+    author 按作者姓名（归一化模糊匹配）过滤；year_from/year_to 年份区间。
+    """
     query = db.query(Paper)
 
     if q:
         like = f"%{q.strip()}%"
-        query = query.filter(
-            or_(Paper.title.ilike(like), Paper.abstract.ilike(like))
-        )
+        if field == "title":
+            query = query.filter(Paper.title.ilike(like))
+        elif field == "abstract":
+            query = query.filter(Paper.abstract.ilike(like))
+        else:
+            query = query.filter(
+                or_(Paper.title.ilike(like), Paper.abstract.ilike(like))
+            )
+    if author:
+        # 作者过滤：小写归一化 LIKE（作者表 name_normalized 已小写）
+        query = query.join(PaperAuthor, PaperAuthor.paper_id == Paper.id).join(
+            Author, Author.id == PaperAuthor.author_id
+        ).filter(Author.name_normalized.ilike(f"%{author.strip().lower()}%"))
+    if year_from is not None:
+        query = query.filter(Paper.year >= year_from)
+    if year_to is not None:
+        query = query.filter(Paper.year <= year_to)
     if topic:
         # EXISTS 子查询：多标签论文不产生重复行，total 计数与排序天然正确
         query = query.filter(
@@ -125,9 +155,15 @@ def list_papers(
     is_ai4se: bool | None = None,
     marks: str | None = None,
     sort: str = "newest",
+    author: str | None = None,
+    field: str = "any",
+    year_from: int | None = None,
+    year_to: int | None = None,
 ) -> tuple[list[PaperListItem], int]:
     """论文列表：过滤 + 排序 + 分页，返回 (items, total)。"""
-    query = build_papers_query(db, q, topic, venue, year, is_ai4se, marks)
+    query = build_papers_query(
+        db, q, topic, venue, year, is_ai4se, marks, author, field, year_from, year_to
+    )
 
     if sort == "venue":
         # A 会正式版优先（venue 非空），再按年份倒序
@@ -162,6 +198,36 @@ def get_paper(db: Session, paper_id: int) -> PaperDetail:
         status=paper.status,
         related=related_papers(db, paper),
     )
+
+
+# ---- M7：单篇 BibTeX / AI 深度摘要 ----
+
+def paper_item(db: Session, paper_id: int) -> PaperListItem:
+    """单篇列表项（含 marks），404 处理；导出/复制场景用。"""
+    paper = db.get(Paper, paper_id, options=_LIST_OPTIONS)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=f"paper {paper_id} not found")
+    return _to_item(paper, _marks_map(db, [paper_id]).get(paper_id))
+
+
+def get_deep_summary(db: Session, paper_id: int) -> dict:
+    """AI 深度摘要（M7，DR-024）：有缓存直接返回；无缓存按需调 LLM 并写库。"""
+    paper = db.get(Paper, paper_id)
+    if paper is None:
+        raise HTTPException(status_code=404, detail=f"paper {paper_id} not found")
+    if paper.deep_summary:
+        return paper.deep_summary
+    from app.crawler.classifier import CostLimitExceeded, generate_deep_summary
+
+    try:
+        result = generate_deep_summary(paper.title, paper.abstract, paper.year)
+    except CostLimitExceeded as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if result is None:
+        raise HTTPException(status_code=503, detail="深度摘要生成失败，请稍后重试")
+    paper.deep_summary = result
+    db.commit()
+    return result
 
 
 # ---- M6：个性化标记 ----

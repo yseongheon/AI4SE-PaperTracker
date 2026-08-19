@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // M4 详情页：中文摘要 / 主题标签 / arXiv+DBLP/DOI 双链接 / 作者 / 英文摘要
 // M6：亮点速读卡片 / 收藏·已读·稍后读标记 / 相关论文推荐
-import { onMounted, ref } from 'vue'
+// M7：AI 深度摘要（按需生成+缓存）/ BibTeX 一键复制 / PDF 直达 / 作者点击
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getPaper, setMark } from '../api/papers'
+import { ElMessage } from 'element-plus'
+import { getBibtex, getDeepSummary, getPaper, setMark } from '../api/papers'
 import TopicTag from '../components/TopicTag.vue'
-import type { MarkType, PaperDetail } from '../types'
+import type { DeepSummary, MarkType, PaperDetail } from '../types'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,7 +16,10 @@ const paper = ref<PaperDetail | null>(null)
 const loading = ref(true)
 const notFound = ref(false)
 
-onMounted(async () => {
+// 关键：详情 → 详情跳转时组件复用、onMounted 不重跑，必须监听路由参数变化重新加载
+async function loadPaper() {
+  loading.value = true
+  notFound.value = false
   try {
     paper.value = await getPaper(Number(route.params.id))
   } catch (e: unknown) {
@@ -24,7 +29,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+watch(() => route.params.id, loadPaper, { immediate: true })
 
 // M6 标记 toggle：成功后局部更新，不整页刷新
 async function toggleMark(type: MarkType) {
@@ -39,6 +46,49 @@ async function toggleMark(type: MarkType) {
 
 function goRelated(id: number) {
   router.push(`/papers/${id}`)
+}
+
+// M7 AI 深度摘要：按需生成（后端缓存复用）；生成中禁用按钮
+const deepSummary = ref<DeepSummary | null>(null)
+const deepLoading = ref(false)
+
+async function loadDeepSummary() {
+  if (!paper.value || deepLoading.value) return
+  deepLoading.value = true
+  try {
+    deepSummary.value = await getDeepSummary(paper.value.id)
+  } catch (e) {
+    console.error('深度摘要生成失败', e)
+    ElMessage.error('深度摘要生成失败，请稍后重试')
+  } finally {
+    deepLoading.value = false
+  }
+}
+
+// M7 BibTeX 一键复制（科研引用刚需）
+async function copyBibtex() {
+  if (!paper.value) return
+  try {
+    const bib = await getBibtex(paper.value.id)
+    await navigator.clipboard.writeText(bib)
+    ElMessage.success('BibTeX 已复制到剪贴板')
+  } catch (e) {
+    console.error('BibTeX 复制失败', e)
+    ElMessage.error('复制失败，请手动复制或下载')
+  }
+}
+
+// M7 作者点击 → 列表页按作者过滤
+function goAuthor(name: string) {
+  router.push({ path: '/', query: { author: name } })
+}
+
+const DEEP_LABELS: Record<string, string> = {
+  background: '背景',
+  problem: '问题',
+  method: '方法',
+  results: '实验',
+  conclusion: '结论',
 }
 
 const MATCH_TEXT: Record<string, string> = {
@@ -123,6 +173,42 @@ const STATUS_TEXT: Record<string, string> = {
         </div>
       </el-card>
 
+      <!-- M7 AI 深度摘要（按需生成+缓存）：背景/问题/方法/实验/结论 -->
+      <el-card class="card" shadow="never">
+        <template #header>
+          <span class="card-title">AI 深度摘要</span>
+          <el-button
+            v-if="!deepSummary"
+            size="small"
+            type="primary"
+            class="deep-btn"
+            :loading="deepLoading"
+            @click="loadDeepSummary"
+          >
+            {{ deepLoading ? '生成中…' : '生成深度摘要' }}
+          </el-button>
+          <el-button
+            v-else
+            size="small"
+            text
+            class="deep-btn"
+            @click="deepSummary = null"
+          >
+            收起
+          </el-button>
+        </template>
+        <template v-if="deepSummary">
+          <div v-for="(text, key) in deepSummary" :key="key" class="hl-row">
+            <span class="hl-label">{{ DEEP_LABELS[key] }}</span>
+            <span class="hl-text">{{ text }}</span>
+          </div>
+          <p class="deep-hint">快速判断该论文与课题的相关性：背景 → 问题 → 方法 → 实验 → 结论</p>
+        </template>
+        <p v-else class="deep-empty">
+          一键生成结构化摘要（研究背景 / 要解决的问题 / 方法 / 主要实验 / 结论），快速判断是否与课题相关
+        </p>
+      </el-card>
+
       <el-card v-if="paper.summary_zh" class="card summary-zh" shadow="never">
         <template #header>
           <span class="card-title">中文摘要（LLM 生成）</span>
@@ -143,8 +229,19 @@ const STATUS_TEXT: Record<string, string> = {
         </template>
         <div class="links">
           <el-link v-if="paper.arxiv_url" :href="paper.arxiv_url" target="_blank" type="primary">
-            arXiv 预印本 ↗
+            arXiv 摘要页 ↗
           </el-link>
+          <el-link v-if="paper.pdf_url" :href="paper.pdf_url" target="_blank" type="primary">
+            PDF 直达 ↗
+          </el-link>
+          <el-button
+            v-if="paper.id"
+            size="small"
+            class="copy-bib"
+            @click="copyBibtex"
+          >
+            复制 BibTeX
+          </el-button>
           <el-link v-if="paper.dblp_url" :href="paper.dblp_url" target="_blank" type="primary">
             DBLP 收录页 ↗
           </el-link>
@@ -157,9 +254,19 @@ const STATUS_TEXT: Record<string, string> = {
 
       <el-card v-if="paper.authors.length" class="card" shadow="never">
         <template #header>
-          <span class="card-title">作者</span>
+          <span class="card-title">作者（点击查看该作者全部论文）</span>
         </template>
-        <p class="authors">{{ paper.authors.join('、') }}</p>
+        <p class="authors">
+          <el-link
+            v-for="(a, i) in paper.authors"
+            :key="i"
+            type="primary"
+            class="author-link"
+            @click="goAuthor(a)"
+          >
+            {{ a }}<span v-if="i < paper.authors.length - 1">、</span>
+          </el-link>
+        </p>
       </el-card>
 
       <!-- M6 相关论文推荐：同主题 + 标题相似 -->
@@ -168,8 +275,11 @@ const STATUS_TEXT: Record<string, string> = {
           <span class="card-title">相关论文推荐</span>
         </template>
         <ul class="related">
-          <li v-for="r in paper.related" :key="r.id">
-            <el-link type="primary" @click="goRelated(r.id)">{{ r.title }}</el-link>
+          <li v-for="r in paper.related" :key="r.id" @click="goRelated(r.id)">
+            <!-- 标题用 RouterLink 保证跳转可靠；整行点击也跳转（双保险） -->
+            <RouterLink :to="`/papers/${r.id}`" class="related-link">
+              {{ r.title }} <span class="related-arrow">→</span>
+            </RouterLink>
             <span v-if="r.venue" class="muted">· {{ r.venue.short_name }} {{ r.year ?? '' }}</span>
             <span v-if="r.marks.bookmark" class="muted">⭐</span>
           </li>
@@ -244,10 +354,37 @@ const STATUS_TEXT: Record<string, string> = {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+}
+.related li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.related li:hover {
+  background: var(--brand-bg-soft);
+  cursor: pointer;
+}
+.related-link {
+  text-decoration-thickness: 1px;
+  color: inherit;
+}
+.related-link:hover {
+  background: transparent; /* 整行 hover 高亮已由 li 承担 */
+}
+.related-arrow {
+  color: var(--brand-primary);
+  font-weight: 700;
+  transition: margin-left 0.15s;
+}
+.related li:hover .related-arrow {
+  margin-left: 4px;
 }
 .related .muted {
-  margin-left: 4px;
+  margin-left: 2px;
 }
 .summary-zh {
   border-left: 4px solid var(--brand-primary);
@@ -264,10 +401,36 @@ const STATUS_TEXT: Record<string, string> = {
 }
 .links {
   display: flex;
+  align-items: center;
   gap: 24px;
+  flex-wrap: wrap;
+}
+.copy-bib {
+  margin-left: auto;
 }
 .authors {
   color: var(--el-text-color-regular);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.author-link {
+  text-decoration-thickness: 1px;
+  font-weight: 500;
+}
+.deep-btn {
+  float: right;
+  margin-top: -4px;
+}
+.deep-empty {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.deep-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
 }
 .muted {
   color: var(--el-text-color-secondary);

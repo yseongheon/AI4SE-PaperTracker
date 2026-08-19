@@ -49,6 +49,7 @@ class PaperListItem(BaseModel):
     published_at: date | None
     is_ai4se_confirmed: bool
     arxiv_url: str | None
+    pdf_url: str | None = None  # M7 arXiv PDF 直链
     dblp_url: str | None
     doi: str | None
     marks: PaperMarks = PaperMarks()

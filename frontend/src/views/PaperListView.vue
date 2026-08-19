@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // M4 列表页：左侧筛选侧栏（主题/会议/年份/AI4SE/排序/阅读状态）+ el-table + 搜索 + 分页
-// M6：收藏星标 / 已读淡化 / 导出筛选结果
+// M6：收藏星标 / 已读淡化 / 导出筛选结果；M7：多选导出 / 作者点击 / 高级筛选
 import { onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { listTopics } from '../api/topics'
@@ -15,6 +15,7 @@ import FilterSidebar from '../components/FilterSidebar.vue'
 import TopicTag from '../components/TopicTag.vue'
 import type { PaperListItem, TopicWithCount, VenueWithCount } from '../types'
 
+const route = useRoute()
 const router = useRouter()
 const filter = useFilterStore()
 const paperStore = usePaperStore()
@@ -24,8 +25,13 @@ const topics = ref<TopicWithCount[]>([])
 const venues = ref<VenueWithCount[]>([])
 const years = ref<number[]>([])
 const searchText = ref(filter.q)
+const selectedIds = ref<number[]>([]) // M7 多选导出
 
 onMounted(async () => {
+  // M7：从作者榜/详情页跳转过来（?author=xxx）→ 初始化作者过滤
+  if (route.query.author) {
+    filter.author = String(route.query.author)
+  }
   try {
     // 年份选项来自趋势接口的年份分组（数据驱动，不硬编码）
     const [t, v, y] = await Promise.all([listTopics(), listVenues(), getTrends('year')])
@@ -57,12 +63,6 @@ function goDetail(id: number) {
   router.push(`/papers/${id}`)
 }
 
-function authorsText(authors: string[]): string {
-  return authors.length > 3
-    ? authors.slice(0, 3).join(', ') + ` 等 ${authors.length} 人`
-    : authors.join(', ')
-}
-
 // M6 收藏星标：toggle 后刷新列表（marks 过滤下即时移除/恢复行）
 async function toggleBookmark(row: PaperListItem) {
   try {
@@ -83,13 +83,33 @@ function downloadExport(format: 'csv' | 'json' | 'bibtex') {
   window.open(
     exportUrl(format, {
       q: filter.q || undefined,
+      field: filter.field,
       topic: filter.topic || undefined,
       venue: filter.venue || undefined,
       year: filter.year ?? undefined,
+      year_from: filter.yearFrom ?? undefined,
+      year_to: filter.yearTo ?? undefined,
       is_ai4se: filter.isAi4se || undefined,
       marks: filter.marks || undefined,
+      author: filter.author || undefined,
     }),
   )
+}
+
+// M7 导出选中（勾选行）
+function exportSelected(format: 'csv' | 'json' | 'bibtex') {
+  if (!selectedIds.value.length) return
+  window.open(exportUrl(format, { ids: selectedIds.value }))
+}
+
+function onSelectionChange(rows: PaperListItem[]) {
+  selectedIds.value = rows.map((r) => r.id)
+}
+
+// M7 作者点击 → 按作者过滤
+function filterByAuthor(name: string) {
+  filter.author = name
+  filter.page = 1
 }
 </script>
 
@@ -107,9 +127,60 @@ function downloadExport(format: 'csv' | 'json' | 'bibtex') {
           @clear="applySearch"
         />
         <el-button type="primary" @click="applySearch">搜索</el-button>
+        <el-popover trigger="click" placement="bottom-start" width="300">
+          <template #reference>
+            <el-button>高级筛选<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          </template>
+          <div class="adv-filter">
+            <div class="adv-row">
+              <span class="adv-label">搜索范围</span>
+              <el-radio-group v-model="filter.field" size="small">
+                <el-radio-button value="any">标题+摘要</el-radio-button>
+                <el-radio-button value="title">仅标题</el-radio-button>
+                <el-radio-button value="abstract">仅摘要</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div class="adv-row">
+              <span class="adv-label">作者</span>
+              <el-input
+                v-model="filter.author"
+                size="small"
+                placeholder="作者姓名（模糊）"
+                clearable
+                @keyup.enter="applySearch"
+              />
+            </div>
+            <div class="adv-row">
+              <span class="adv-label">年份区间</span>
+              <el-input-number v-model="filter.yearFrom" size="small" :min="1990" :max="2100" :controls="false" placeholder="起" style="width: 90px" />
+              <span class="adv-sep">—</span>
+              <el-input-number v-model="filter.yearTo" size="small" :min="1990" :max="2100" :controls="false" placeholder="止" style="width: 90px" />
+            </div>
+            <div class="adv-actions">
+              <el-button size="small" @click="filter.reset()">重置</el-button>
+              <el-button size="small" type="primary" @click="applySearch">应用</el-button>
+            </div>
+          </div>
+        </el-popover>
         <el-dropdown trigger="click" @command="downloadExport">
           <el-button>
             导出筛选结果<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="csv">CSV（Excel）</el-dropdown-item>
+              <el-dropdown-item command="json">JSON</el-dropdown-item>
+              <el-dropdown-item command="bibtex">BibTeX（引用）</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-dropdown
+          trigger="click"
+          :disabled="!selectedIds.length"
+          @command="exportSelected"
+        >
+          <el-button :disabled="!selectedIds.length">
+            导出选中 ({{ selectedIds.length }})<el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
@@ -137,7 +208,9 @@ function downloadExport(format: 'csv' | 'json' | 'bibtex') {
         class="table"
         :row-class-name="rowClass"
         @row-click="(row: PaperListItem) => goDetail(row.id)"
+        @selection-change="onSelectionChange"
       >
+        <el-table-column type="selection" width="40" align="center" />
         <el-table-column label="收藏" width="64" align="center">
           <template #default="{ row }">
             <el-button
@@ -156,7 +229,17 @@ function downloadExport(format: 'csv' | 'json' | 'bibtex') {
           </template>
         </el-table-column>
         <el-table-column label="作者" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">{{ authorsText(row.authors) }}</template>
+          <template #default="{ row }">
+            <el-link
+              v-for="(a, i) in row.authors"
+              :key="i"
+              type="primary"
+              class="author-link"
+              @click.stop="filterByAuthor(a)"
+            >
+              {{ a }}<span v-if="i < row.authors.length - 1">、</span>
+            </el-link>
+          </template>
         </el-table-column>
         <el-table-column label="会议" width="80" align="center">
           <template #default="{ row }">
@@ -229,6 +312,35 @@ function downloadExport(format: 'csv' | 'json' | 'bibtex') {
 }
 .muted {
   color: var(--el-text-color-placeholder);
+}
+/* M7 高级筛选弹层 */
+.adv-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.adv-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.adv-label {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+.adv-sep {
+  color: var(--el-text-color-placeholder);
+}
+.adv-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.author-link {
+  text-decoration-thickness: 1px;
+  font-weight: 500;
 }
 /* M6 已读行淡化（row-class-name 作用在 tr 上） */
 .table :deep(tr.row-read) {

@@ -40,6 +40,7 @@ export interface PaperListItem {
   published_at: string | null
   is_ai4se_confirmed: boolean
   arxiv_url: string | null
+  pdf_url: string | null // M7 arXiv PDF 直链
   dblp_url: string | null
   doi: string | null
   marks: PaperMarks
@@ -66,11 +67,15 @@ export interface PaperListParams {
   page?: number
   page_size?: number
   q?: string
+  field?: 'any' | 'title' | 'abstract' // M7 搜索范围
   topic?: string
   venue?: string
   year?: number
+  year_from?: number // M7 年份区间
+  year_to?: number
   is_ai4se?: boolean
   marks?: Exclude<MarksFilter, ''>
+  author?: string // M7 作者过滤
   sort?: 'newest' | 'venue'
 }
 
@@ -99,3 +104,49 @@ export interface TrendResponse {
 }
 
 export type AggregateMode = 'day' | 'week' | 'month'
+
+// ---- M7 分析图表 ----
+
+export interface WordItem {
+  word: string
+  count: number
+}
+
+export interface AuthorStat {
+  id: number
+  name: string
+  paper_count: number
+  ai4se_count: number
+  top_topics: { slug: string; name_zh: string; count: number }[]
+}
+
+export interface CrossMatrix {
+  venues: string[]
+  topics: string[]
+  matrix: number[][]
+}
+
+export interface CoauthorNode {
+  id: number
+  name: string
+  paper_count: number
+}
+
+export interface CoauthorLink {
+  source: number
+  target: number
+  weight: number
+}
+
+export interface CoauthorGraph {
+  nodes: CoauthorNode[]
+  links: CoauthorLink[]
+}
+
+export interface DeepSummary {
+  background: string
+  problem: string
+  method: string
+  results: string
+  conclusion: string
+}

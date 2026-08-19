@@ -21,11 +21,15 @@ export const usePaperStore = defineStore('paper', {
           page: filter.page,
           page_size: filter.pageSize,
           q: filter.q || undefined,
+          field: filter.field,
           topic: filter.topic || undefined,
           venue: filter.venue || undefined,
           year: filter.year ?? undefined,
+          year_from: filter.yearFrom ?? undefined,
+          year_to: filter.yearTo ?? undefined,
           is_ai4se: filter.isAi4se || undefined,
           marks: filter.marks || undefined,
+          author: filter.author || undefined,
           sort: filter.sort,
         })
         this.items = page.items

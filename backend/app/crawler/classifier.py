@@ -149,6 +149,76 @@ Rules:
 """
 
 
+_DEEP_SUMMARY_SYSTEM = """You are an expert paper reader. Read the given paper and produce a
+structured Chinese summary. Respond with STRICT JSON only, no markdown:
+{"background": "研究背景（≤80字）", "problem": "要解决什么问题（≤80字）", "method": "方法/思路（≤100字）", "results": "主要实验结果（≤80字）", "conclusion": "结论/贡献（≤80字）"}
+Rules: be specific and factual, no empty strings, no generic filler.
+"""
+
+
+def parse_deep_summary(text: str) -> dict | None:
+    """解析深度摘要结构化输出；缺任一字段返回 None（调用方重试）。"""
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    result = {}
+    for key in ("background", "problem", "method", "results", "conclusion"):
+        value = data.get(key)
+        if not isinstance(value, str) or not value.strip():
+            return None
+        result[key] = value.strip()
+    return result
+
+
+def generate_deep_summary(
+    title: str, abstract: str | None, year: int | None = None
+) -> dict | None:
+    """按需生成深度摘要（M7，DR-024：点击才调 LLM，生成后缓存复用）。
+
+    与 classify 同模式：结构化 JSON + 重试（最多 2 次）+ CostTracker 成本累计。
+    """
+    classifier = DeepSeekClassifier()
+    user_content = (
+        f"Title: {title}\nYear: {year or 'unknown'}\n"
+        f"Abstract: {(abstract or '')[:ABSTRACT_MAX_CHARS]}"
+    )
+    last_err: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = classifier.client.chat.completions.create(
+                model=classifier.model,
+                messages=[
+                    {"role": "system", "content": _DEEP_SUMMARY_SYSTEM},
+                    {"role": "user", "content": user_content},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.2,
+                max_tokens=600,
+            )
+            result = parse_deep_summary(resp.choices[0].message.content or "")
+            classifier.cost.update(resp.usage)
+            if result is not None:
+                return result
+            last_err = ValueError("deep summary output failed schema validation")
+            logger.warning("deep summary parse failed (attempt %d), retry", attempt + 1)
+        except CostLimitExceeded:
+            raise
+        except Exception as exc:
+            last_err = exc
+            logger.warning(
+                "deep summary api error (attempt %d): %s, backoff %ds",
+                attempt + 1,
+                type(exc).__name__,
+                (attempt + 1) * 2,
+            )
+            time.sleep((attempt + 1) * 2)
+    logger.error("deep summary failed after retries: %s", last_err)
+    return None
+
+
 def parse_llm_result(text: str) -> LlmResult | None:
     """解析并校验 LLM 结构化输出；不合法返回 None（调用方重试）。"""
     try:
