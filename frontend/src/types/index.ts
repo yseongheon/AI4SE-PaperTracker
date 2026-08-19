@@ -39,6 +39,7 @@ export interface PaperListItem {
   year: number | null
   published_at: string | null
   is_ai4se_confirmed: boolean
+  citation_count: number | null // M8 Crossref/S2 双源引用数
   arxiv_url: string | null
   pdf_url: string | null // M7 arXiv PDF 直链
   dblp_url: string | null
@@ -76,7 +77,8 @@ export interface PaperListParams {
   is_ai4se?: boolean
   marks?: Exclude<MarksFilter, ''>
   author?: string // M7 作者过滤
-  sort?: 'newest' | 'venue'
+  min_citations?: number // M8 最低引用数
+  sort?: 'newest' | 'venue' | 'citations'
 }
 
 export interface TopicWithCount extends TopicBrief {

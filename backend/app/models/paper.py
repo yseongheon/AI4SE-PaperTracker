@@ -72,6 +72,7 @@ class Paper(Base):
     match_candidates: Mapped[list[dict] | None] = mapped_column(  # 歧义时多候选快照，人工复核用
         JSON, nullable=True, default=None
     )
+    citation_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # M8 OpenAlex 被引数
     summary_zh: Mapped[str | None] = mapped_column(Text, nullable=True)  # LLM 中文摘要
     highlights: Mapped[dict | None] = mapped_column(  # LLM 亮点速读 {contribution, limitation}
         JSON, nullable=True, default=None

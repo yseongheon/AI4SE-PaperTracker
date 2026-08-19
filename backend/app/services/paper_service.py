@@ -54,6 +54,7 @@ def _to_item(paper: Paper, marks: PaperMarks | None = None) -> PaperListItem:
         year=paper.year,
         published_at=paper.published_at.date() if paper.published_at else None,
         is_ai4se_confirmed=paper.is_ai4se_confirmed,
+        citation_count=paper.citation_count,
         arxiv_url=paper.arxiv_url,
         pdf_url=pdf_url(paper.arxiv_url),
         dblp_url=dblp_url(paper.dblp_key),
@@ -91,14 +92,18 @@ def build_papers_query(
     field: str = "any",
     year_from: int | None = None,
     year_to: int | None = None,
+    min_citations: int | None = None,
 ):
-    """公共过滤构建器（M6+M7）：列表与导出共用同一套过滤条件。
+    """公共过滤构建器（M6+M7+M8）：列表与导出共用同一套过滤条件。
 
     field 指定 q 的搜索范围：any（标题+摘要）/ title / abstract；
-    author 按作者姓名（归一化模糊匹配）过滤；year_from/year_to 年份区间。
+    author 按作者姓名（归一化模糊匹配）过滤；year_from/year_to 年份区间；
+    min_citations（M8）只看引用数 ≥ N 的论文。
     """
     query = db.query(Paper)
 
+    if min_citations is not None:
+        query = query.filter(Paper.citation_count >= min_citations)
     if q:
         like = f"%{q.strip()}%"
         if field == "title":
@@ -159,13 +164,22 @@ def list_papers(
     field: str = "any",
     year_from: int | None = None,
     year_to: int | None = None,
+    min_citations: int | None = None,
 ) -> tuple[list[PaperListItem], int]:
     """论文列表：过滤 + 排序 + 分页，返回 (items, total)。"""
     query = build_papers_query(
-        db, q, topic, venue, year, is_ai4se, marks, author, field, year_from, year_to
+        db, q, topic, venue, year, is_ai4se, marks, author, field, year_from, year_to,
+        min_citations,
     )
 
-    if sort == "venue":
+    if sort == "citations":
+        # M8 被引量优先（空值最后），再按年份倒序
+        query = query.order_by(
+            Paper.citation_count.desc().nullslast(),
+            Paper.year.desc().nullslast(),
+            Paper.id.desc(),
+        )
+    elif sort == "venue":
         # A 会正式版优先（venue 非空），再按年份倒序
         query = query.order_by(
             Paper.venue_id.is_(None), Paper.year.desc().nullslast(), Paper.id.desc()

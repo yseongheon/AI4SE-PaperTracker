@@ -156,6 +156,17 @@ function filterByAuthor(name: string) {
               <span class="adv-sep">—</span>
               <el-input-number v-model="filter.yearTo" size="small" :min="1990" :max="2100" :controls="false" placeholder="止" style="width: 90px" />
             </div>
+            <div class="adv-row">
+              <span class="adv-label">最低被引</span>
+              <el-input-number
+                v-model="filter.minCitations"
+                size="small"
+                :min="0"
+                :controls="false"
+                placeholder="只看被引 ≥ N"
+                style="width: 130px"
+              />
+            </div>
             <div class="adv-actions">
               <el-button size="small" @click="filter.reset()">重置</el-button>
               <el-button size="small" type="primary" @click="applySearch">应用</el-button>
@@ -250,6 +261,12 @@ function filterByAuthor(name: string) {
           </template>
         </el-table-column>
         <el-table-column label="年份" width="80" align="center" prop="year" />
+        <el-table-column label="被引" width="80" align="center">
+          <template #default="{ row }">
+            <span v-if="row.citation_count != null" class="cite">🔥 {{ row.citation_count }}</span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="主题" min-width="220">
           <template #default="{ row }">
             <TopicTag v-for="t in row.topics" :key="t.slug" :topic="t" />
@@ -358,6 +375,10 @@ function filterByAuthor(name: string) {
 }
 .star-off:hover {
   opacity: 1;
+}
+.cite {
+  font-size: 12px;
+  color: var(--brand-text);
 }
 .pager {
   margin-top: 14px;

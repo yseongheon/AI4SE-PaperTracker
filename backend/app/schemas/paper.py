@@ -48,6 +48,7 @@ class PaperListItem(BaseModel):
     year: int | None
     published_at: date | None
     is_ai4se_confirmed: bool
+    citation_count: int | None = None  # M8 OpenAlex 调整后：Crossref/S2 双源引用数
     arxiv_url: str | None
     pdf_url: str | None = None  # M7 arXiv PDF 直链
     dblp_url: str | None

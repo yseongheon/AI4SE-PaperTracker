@@ -26,12 +26,13 @@ def list_papers(
     field: str = Query("any", pattern="^(any|title|abstract)$", description="q 搜索范围：any=标题+摘要 / title / abstract"),
     year_from: int | None = Query(None, ge=1990, le=2100, description="年份区间起"),
     year_to: int | None = Query(None, ge=1990, le=2100, description="年份区间止"),
-    sort: str = Query("newest", pattern="^(newest|venue)$", description="newest=按时间倒序；venue=会议版优先"),
+    min_citations: int | None = Query(None, ge=0, description="M8 只看引用数 ≥ N 的论文"),
+    sort: str = Query("newest", pattern="^(newest|venue|citations)$", description="newest=按时间倒序；venue=会议版优先；citations=按被引量"),
     db: Session = Depends(get_db),
 ) -> PaperPage:
     items, total = paper_service.list_papers(
         db, page, page_size, q, topic, venue, year, is_ai4se, marks, sort,
-        author, field, year_from, year_to,
+        author, field, year_from, year_to, min_citations,
     )
     return PaperPage(items=items, total=total, page=page, page_size=page_size)
 

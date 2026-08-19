@@ -63,6 +63,7 @@
 | DR-023 | 引用数引入 | OpenAlex / Semantic Scholar / 不引入 | **引入 OpenAlex** | DR-002 预留项兑现：免费 API 限流友好，全库回填 10-20 分钟零成本；支持被引展示/排序。附带：引用关系图不做（数据源成本高、收益低，M7 拍板） | 2026-08-19 | 用户 |
 | DR-024 | LLM 深度摘要 | 全量回填 / 按需生成+缓存 | **按需生成+缓存** | 2233 篇全量回填估 $2-4 不划算；详情页按钮点击才调 LLM（每篇 ~$0.001），生成后缓存到 papers.deep_summary 复用 | 2026-08-19 | 用户 |
 | DR-025 | 课题组化分期 | 三期（M7 展示增强/M8 引用数/M9 用户体系）/ 一期全做 | **分三期** | 每期独立交付可用；M9 用户体系改动最大（user_marks 加 user_id），独立里程碑降低风险 | 2026-08-19 | 用户 |
+| DR-026 | 引用数数据源（替代 DR-023） | OpenAlex（原方案）/ Crossref / Semantic Scholar / 双源混合 | **双源混合：Crossref(DOI)+Semantic Scholar(arXiv)** | 实测 api.openalex.org 国内不可达（连接超时，Cloudflare IP 被阻断）；Crossref（DOI 查询快、限流宽松）与 Semantic Scholar（arXiv ID 查询、限流 100 次/5 分钟）均可达；DOI 优先 + arXiv 兜底覆盖率最高 | 2026-08-19 | 用户 |
 
 ### 默认值 / 待确认项（M0 启动时逐项确认，未确认前按默认执行）
 
@@ -230,7 +231,7 @@ AI4SE-PaperTracker/
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /api/papers | 列表：`page, page_size, q, field(any\|title\|abstract), topic, venue, year, year_from, year_to, author, is_ai4se, marks(bookmark\|read_later\|unread), sort(newest\|venue)` |
+| GET | /api/papers | 列表：`page, page_size, q, field(any\|title\|abstract), topic, venue, year, year_from, year_to, author, is_ai4se, marks(bookmark\|read_later\|unread), min_citations, sort(newest\|venue\|citations)` |
 | GET | /api/papers/{id} | 详情：含作者、venue、topics、summary_zh、highlights、双链接、pdf_url、marks、related 相关推荐 |
 | POST | /api/papers/{id}/marks | 设置/取消个性化标记：body `{type: bookmark\|read\|read_later, value: bool}`（幂等，返回最新标记集合） |
 | GET | /api/papers/{id}/bibtex | 单篇 BibTeX（M7 引用复制/下载） |
@@ -306,6 +307,7 @@ cd frontend && npm run dev
 | 批量重新分类全部论文 | `python -m scripts.run_classify` |
 | 回填亮点速读（M6） | `python -m scripts.run_classify --backfill-highlights`（已确认 AI4SE 缺亮点者，估 $0.5-1，成本上限内） |
 | 生成周报（M6） | `python -m scripts.weekly_report`（每周五 09:30 自动触发，输出 data/reports/YYYY-Www.md） |
+| 回填引用数（M8） | `python -m scripts.run_citations`（Crossref DOI 优先 + S2 arXiv 兜底；`--force` 全量重查；结果缓存 data/citation_cache/ 断点续跑） |
 | 复核 DBLP 匹配歧义 | `python -m scripts.review_pending list`（`accept 论文id --idx N/--key 键`、`reject 论文id`） |
 | 导入 CCF 名单 | `python -m scripts.seed_venues` |
 | 导入主题分类法 | `python -m scripts.seed_topics` |
@@ -325,7 +327,7 @@ cd frontend && npm run dev
 | **M5 打磨** | 匹配歧义复核（半自动脚本）、README；Docker 不做（个人本地跑）；增量验证 1 周（DR 拍板：A②+B②+C①+D②） | 连续 1 周自动增量更新无误；数据可恢复 | ⏳ 进行中（2026-08-18，A/B/C 完成，D 观察期至 08-25） |
 | **M6 功能扩展** | AI 阅读增强（LLM 亮点速读+相关推荐）、个性化阅读（收藏/已读/稍后读+过滤）、周报推送、CSV/JSON/BibTeX 导出（DR 拍板：四包全做） | pytest 全绿；vue-tsc+build 通过；浏览器冒烟全功能可用；亮点回填 2212/2235 成功 | ✅ 完成（2026-08-19） |
 | **M7 课题组化 P0** | 展示与分析增强（DR-025）：趋势图图例交互/饼图/堆叠/热力/合作网络/词云/作者榜、高级筛选（作者/搜索范围/年份区间）、多选导出、单篇 BibTeX+PDF 直达+AI 深度摘要（按需）、作者点击联动、start.bat 一键启动 | pytest 全绿；vue-tsc+build 通过；浏览器冒烟全功能可用 | ✅ 完成（2026-08-19） |
-| **M8 课题组化 P1** | OpenAlex 引用数回填 + 被引展示/排序（DR-023） | — | ⏳ 待启动 |
+| **M8 课题组化 P1** | 引用数回填（DR-026：Crossref+S2 双源）+ 被引展示/排序/最低被引筛选 + 导出含被引（DR-023 原方案 OpenAlex 被墙，已替换） | pytest 全绿；回填完成、排序筛选生效 | ⏳ 进行中（2026-08-19，代码完成+128 测试全绿，全库回填后台运行中） |
 | **M9 课题组化 P2** | 登录注册 + 用户偏好隔离 + 个人周报/画像（DR-025，user_marks 加 user_id） | — | ⏳ 待启动 |
 
 **当前进度**：M0~M3 已完成（2026-08-17）。M1 验证记录：4 个 A 会 stream 全量拉取 16967 条（ICSE 7894 / sigsoft 3739 / kbse 3776 / issta 1558，缓存 7 天）；arXiv 近 3 天 4 篇幂等（重跑 new=0/updated=4）；匹配器用真实 DBLP 记录端到端验证通过。M2 验证记录：49 条关键词规则初筛 3875 篇 → 2503 候选；DeepSeek 精标 2501 篇全部完成、**0 失败、成本 $0.65**（deepseek-chat，limit $5）；确认 AI4SE **2233 篇**（58%）；主题分布（llm 标签）：llm4se_general 1761 / testing 803 / code_generation 750 / analysis 670 / defect_detection 532 / code_repair 314 / requirements 135 / code_summarization 78 / code_translation 61 / other 51，1986 篇多主题；抽样 15 篇质量验证通过。M3 验证记录：61 pytest 全绿（含 17 个 API 集成测试，TestClient+内存库）；curl 真实验证全部端点——列表（分页/搜索/主题/会议/年份/AI4SE 过滤、newest/venue 排序）、详情（作者/标签/中文摘要/双链接/404）、topics 计数（llm4se_general 1761）、venues 计数（FSE 66 / ASE 5 / ICSE 3）、trends 三分组（topic 10 条线按天零填充 / venue 3 线 / year 2 年）。M4 验证记录（用户拍板：el-table 表格 + 左侧筛选侧栏 + 多页签）：`vue-tsc` 严格模式 + `vite build` 一次通过；前后端冒烟验证经 dev 代理（localhost:5173 → 127.0.0.1:8000）全部端点可达（列表真实数据/详情/主题计数/会议计数/趋势按天序列）；trends 周/月聚合在前端完成（DR-020 方案 A，见 utils/trends.ts，年份分组恒按原样展示）；年份筛选选项取自趋势接口年份分组（数据驱动）。M5 验证记录（2026-08-18，用户拍板 A②+B②+C①+D②）：① A 匹配歧义复核——matcher 在 pending 时把多候选快照写入 papers.match_candidates（JSON 新列，migration 7c8d79d4ca91），新增 scripts/review_pending.py（list/accept --idx|--key/reject，venue 按 dblp_key 前缀反查）；现有 pending=0（matched 74 全部定案）；71 pytest 全绿（+10 复核脚本测试）；② C README 访客版完成；③ D 增量验证启动——08-18 首跑成功：arXiv 429 退避重试成功、DBLP 4 stream 全缓存命中零 API 请求、匹配 2826 条 matched=0/pending=0、幂等 new=0/updated=1，观察期至 08-25。M6 验证记录（2026-08-19，用户拍板：AI 阅读增强+个性化阅读+周报+导出四包）：migration 28cc6f44279b（papers.highlights JSON + user_marks 复合主键表）；classifier 输出扩展 highlights（容错解析不破坏旧格式）；101 pytest 全绿（+30：highlights 解析/related 排序、marks API 幂等与过滤、三格式导出含 BOM/转义/作者格式、周报统计与渲染）；vue-tsc+vite build 通过；curl 冒烟全通——marks toggle/列表 marks 集合/bookmark 过滤/详情 related 5 篇/CSV BOM/BibTeX 条目/JSON（修了 model_dump 的 date 序列化 bug）/周报 2026-W34.md 生成；亮点速读回填完成（2026-08-19：2234/2235 成功、1 失败，成本 $0.79、累计 $1.44，2212 篇 highlights 落库——注意副产物：22 篇在重判中被降级为非 AI4SE，属 LLM 判定波动，1% 级）。M7 验证记录（2026-08-19，DR-023/024/025 拍板）：migration 58e2e53bd581（papers.deep_summary）；118 pytest 全绿（+17：词云停用词/作者榜聚合/交叉矩阵/共著边权重/author+field+年份区间过滤/单篇 bibtex/pdf_url/export ids/deep-summary 缓存语义——真实 llm_cost.json 累计超测试 limit 致 test_cost_limit_raises 失败，已补 _state_file 隔离）；vue-tsc+build 通过；curl 冒烟全通——words（code 4204/llm 2379）、authors（David Lo 43 篇榜首）、cross 3×7 矩阵、coauthor 节点边、author=david lo 过滤 43 篇、pdf_url、单篇 bibtex、export ids；前端 8 页签趋势页（图例单击只看/再击恢复——纯响应式 legendSelected 无实例依赖）、饼图/堆叠/热力/合作网络（TOP100 共著）/词云（echarts-wordcloud 副作用注册兼容 echarts 6，--legacy-peer-deps 安装）/作者榜（点击跳列表过滤）、列表多选导出+高级筛选 popover+作者点击、详情 AI 深度摘要按钮+复制 BibTeX+PDF 直达+作者点击、start.bat。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装；bash 中 PATH 的 python 可能是 .venv 的，此时用 `.venv/Scripts/python.exe -m uvicorn` 更稳）；前端 `npm run dev`（frontend/ 下，proxy 到 8000；注意 vite 默认绑定 IPv6 ::1，浏览器用 localhost 而非 127.0.0.1 访问）。

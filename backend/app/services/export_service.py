@@ -69,6 +69,8 @@ def _bibtex_entry(paper: PaperListItem) -> str:
         lines.append(f"  url = {{{paper.arxiv_url}}},")
     if paper.dblp_url:
         lines.append(f"  dblp = {{{paper.dblp_url}}},")
+    if paper.citation_count is not None:
+        lines.append(f"  note = {{Cited by {paper.citation_count}}},")
     lines.append("}\n")
     return "\n".join(lines)
 
@@ -79,7 +81,7 @@ def to_csv(items: list[PaperListItem]) -> bytes:
     writer = csv.writer(buf)
     writer.writerow(
         ["id", "title", "authors", "venue", "year", "published_at", "is_ai4se",
-         "topics", "arxiv_url", "dblp_url", "doi", "bookmarked", "read"]
+         "cited_by", "topics", "arxiv_url", "dblp_url", "doi", "bookmarked", "read"]
     )
     for p in items:
         writer.writerow(
@@ -91,6 +93,7 @@ def to_csv(items: list[PaperListItem]) -> bytes:
                 p.year or "",
                 p.published_at.isoformat() if p.published_at else "",
                 "yes" if p.is_ai4se_confirmed else "no",
+                p.citation_count if p.citation_count is not None else "",
                 "; ".join(t.slug for t in p.topics),
                 p.arxiv_url or "",
                 p.dblp_url or "",

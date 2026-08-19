@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import type { MarksFilter } from '../types'
 
 // 筛选条件（列表页 + 侧栏共享；paperStore 按此请求 /api/papers）
-export type SortMode = 'newest' | 'venue'
+export type SortMode = 'newest' | 'venue' | 'citations'
 export type SearchField = 'any' | 'title' | 'abstract'
 
 export const useFilterStore = defineStore('filter', {
@@ -19,6 +19,7 @@ export const useFilterStore = defineStore('filter', {
     isAi4se: false, // 仅看已确认 AI4SE
     marks: '' as MarksFilter, // M6 阅读状态：'' 全部 / bookmark 收藏 / read_later 稍后读 / unread 未读
     author: '', // M7 作者过滤（作者榜/详情页点击跳转）
+    minCitations: null as number | null, // M8 最低引用数
     sort: 'newest' as SortMode,
   }),
   actions: {
@@ -35,6 +36,7 @@ export const useFilterStore = defineStore('filter', {
         isAi4se: false,
         marks: '',
         author: '',
+        minCitations: null,
         sort: 'newest',
       })
     },

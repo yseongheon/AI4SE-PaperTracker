@@ -59,6 +59,7 @@ const { topic, venue, year, isAi4se, marks, sort } = storeToRefs(filter)
       <el-radio-group v-model="sort" class="vert">
         <el-radio value="newest">最新发布</el-radio>
         <el-radio value="venue">A 会优先</el-radio>
+        <el-radio value="citations">被引最多</el-radio>
       </el-radio-group>
     </div>
   </aside>

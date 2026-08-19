@@ -121,6 +121,9 @@ const STATUS_TEXT: Record<string, string> = {
       <div class="meta">
         <el-tag v-if="paper.venue" type="warning">{{ paper.venue.short_name }}</el-tag>
         <el-tag v-if="paper.year" type="info">{{ paper.year }}</el-tag>
+        <el-tag v-if="paper.citation_count != null" type="warning" effect="plain">
+          🔥 被引 {{ paper.citation_count }}
+        </el-tag>
         <span v-if="paper.published_at" class="muted">发布于 {{ paper.published_at }}</span>
         <span class="muted">· {{ STATUS_TEXT[paper.status] ?? paper.status }}</span>
         <span v-if="paper.venue" class="muted">· {{ MATCH_TEXT[paper.match_status] ?? paper.match_status }}</span>
