@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // M4 列表页：左侧筛选侧栏（主题/会议/年份/AI4SE/排序/阅读状态）+ el-table + 搜索 + 分页
 // M6：收藏星标 / 已读淡化 / 导出筛选结果；M7：多选导出 / 作者点击 / 高级筛选
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { ArrowDown } from '@element-plus/icons-vue'
@@ -26,6 +26,32 @@ const venues = ref<VenueWithCount[]>([])
 const years = ref<number[]>([])
 const searchText = ref(filter.q)
 const selectedIds = ref<number[]>([]) // M7 多选导出
+const advVisible = ref(false) // M7 高级筛选弹窗
+
+// M7 已应用的高级筛选摘要（field/author/年份区间/最低被引 非默认值即展示）
+const advSummary = computed(() => {
+  const parts: string[] = []
+  if (filter.field !== 'any') {
+    parts.push({ any: '标题+摘要', title: '仅标题', abstract: '仅摘要' }[filter.field])
+  }
+  if (filter.author) parts.push(`作者=${filter.author}`)
+  if (filter.yearFrom != null || filter.yearTo != null) {
+    parts.push(`年份 ${filter.yearFrom ?? '…'}-${filter.yearTo ?? '…'}`)
+  }
+  if (filter.minCitations != null) parts.push(`被引≥${filter.minCitations}`)
+  return parts
+})
+
+// 应用高级筛选：关弹窗 + 回到第一页（v-model 已直接写入 store，watch 自动触发请求）
+function applyAdvFilter() {
+  advVisible.value = false
+  filter.page = 1
+}
+
+// 清除高级筛选（保留搜索词与侧栏条件）
+function clearAdv() {
+  filter.$patch({ field: 'any', author: '', yearFrom: null, yearTo: null, minCitations: null, page: 1 })
+}
 
 onMounted(async () => {
   // M7：从作者榜/详情页跳转过来（?author=xxx）→ 初始化作者过滤
@@ -127,54 +153,9 @@ function filterByAuthor(name: string) {
           @clear="applySearch"
         />
         <el-button type="primary" @click="applySearch">搜索</el-button>
-        <el-popover trigger="click" placement="bottom-start" width="300">
-          <template #reference>
-            <el-tooltip content="高级筛选：搜索范围 / 作者 / 年份区间 / 最低被引" placement="top">
-              <el-button>高级筛选<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
-            </el-tooltip>
-          </template>
-          <div class="adv-filter">
-            <div class="adv-row">
-              <span class="adv-label">搜索范围</span>
-              <el-radio-group v-model="filter.field" size="small">
-                <el-radio-button value="any">标题+摘要</el-radio-button>
-                <el-radio-button value="title">仅标题</el-radio-button>
-                <el-radio-button value="abstract">仅摘要</el-radio-button>
-              </el-radio-group>
-            </div>
-            <div class="adv-row">
-              <span class="adv-label">作者</span>
-              <el-input
-                v-model="filter.author"
-                size="small"
-                placeholder="作者姓名（模糊）"
-                clearable
-                @keyup.enter="applySearch"
-              />
-            </div>
-            <div class="adv-row">
-              <span class="adv-label">年份区间</span>
-              <el-input-number v-model="filter.yearFrom" size="small" :min="1990" :max="2100" :controls="false" placeholder="起" style="width: 90px" />
-              <span class="adv-sep">—</span>
-              <el-input-number v-model="filter.yearTo" size="small" :min="1990" :max="2100" :controls="false" placeholder="止" style="width: 90px" />
-            </div>
-            <div class="adv-row">
-              <span class="adv-label">最低被引</span>
-              <el-input-number
-                v-model="filter.minCitations"
-                size="small"
-                :min="0"
-                :controls="false"
-                placeholder="只看被引 ≥ N"
-                style="width: 130px"
-              />
-            </div>
-            <div class="adv-actions">
-              <el-button size="small" @click="filter.reset()">重置</el-button>
-              <el-button size="small" type="primary" @click="applySearch">应用</el-button>
-            </div>
-          </div>
-        </el-popover>
+        <el-button @click="advVisible = true">
+          高级筛选<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
         <el-dropdown trigger="click" @command="downloadExport">
           <el-tooltip content="导出符合当前筛选条件的全部论文（不勾选也有效）" placement="top">
             <el-button>
@@ -208,6 +189,55 @@ function filterByAuthor(name: string) {
           </template>
         </el-dropdown>
         <span class="total">共 <span class="mono">{{ paperStore.total }}</span> 篇</span>
+      </div>
+
+      <!-- M7 高级筛选：dialog 弹窗（popover+tooltip 嵌套在部分环境点不开，改 dialog 更稳、手机端友好） -->
+      <el-dialog v-model="advVisible" title="高级筛选" width="420px">
+        <div class="adv-filter">
+          <div class="adv-row">
+            <span class="adv-label">搜索范围</span>
+            <el-radio-group v-model="filter.field">
+              <el-radio-button value="any">标题+摘要</el-radio-button>
+              <el-radio-button value="title">仅标题</el-radio-button>
+              <el-radio-button value="abstract">仅摘要</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="adv-row">
+            <span class="adv-label">作者</span>
+            <el-input
+              v-model="filter.author"
+              placeholder="作者姓名（模糊匹配）"
+              clearable
+              @keyup.enter="applyAdvFilter"
+            />
+          </div>
+          <div class="adv-row">
+            <span class="adv-label">年份区间</span>
+            <el-input-number v-model="filter.yearFrom" :min="1990" :max="2100" :controls="false" placeholder="起" style="width: 120px" />
+            <span class="adv-sep">—</span>
+            <el-input-number v-model="filter.yearTo" :min="1990" :max="2100" :controls="false" placeholder="止" style="width: 120px" />
+          </div>
+          <div class="adv-row">
+            <span class="adv-label">最低被引</span>
+            <el-input-number
+              v-model="filter.minCitations"
+              :min="0"
+              :controls="false"
+              placeholder="只看被引 ≥ N 的论文"
+              style="width: 180px"
+            />
+          </div>
+        </div>
+        <template #footer>
+          <el-button @click="filter.reset()">重置全部</el-button>
+          <el-button type="primary" @click="applyAdvFilter">应用</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 已应用的高级筛选条件摘要（一眼可见生效状态） -->
+      <div v-if="advSummary.length" class="adv-summary">
+        已应用：{{ advSummary.join(' · ') }}
+        <el-link type="primary" @click="clearAdv">清除高级筛选</el-link>
       </div>
 
       <el-alert
@@ -376,6 +406,14 @@ function filterByAuthor(name: string) {
 .adv-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+.adv-summary {
+  margin: -6px 0 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 .author-link {
