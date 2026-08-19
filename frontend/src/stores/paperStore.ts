@@ -25,6 +25,7 @@ export const usePaperStore = defineStore('paper', {
           venue: filter.venue || undefined,
           year: filter.year ?? undefined,
           is_ai4se: filter.isAi4se || undefined,
+          marks: filter.marks || undefined,
           sort: filter.sort,
         })
         this.items = page.items

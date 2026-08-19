@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import type { MarksFilter } from '../types'
 
 // 筛选条件（列表页 + 侧栏共享；paperStore 按此请求 /api/papers）
 export type SortMode = 'newest' | 'venue'
@@ -12,6 +13,7 @@ export const useFilterStore = defineStore('filter', {
     venue: '', // '' = 全部
     year: null as number | null, // null = 全部
     isAi4se: false, // 仅看已确认 AI4SE
+    marks: '' as MarksFilter, // M6 阅读状态：'' 全部 / bookmark 收藏 / read_later 稍后读 / unread 未读
     sort: 'newest' as SortMode,
   }),
   actions: {
@@ -23,6 +25,7 @@ export const useFilterStore = defineStore('filter', {
         venue: '',
         year: null,
         isAi4se: false,
+        marks: '',
         sort: 'newest',
       })
     },

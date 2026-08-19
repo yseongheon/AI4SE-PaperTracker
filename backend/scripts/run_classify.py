@@ -35,11 +35,25 @@ EST_COST_PER_PAPER = (
 )  # ≈ $0.00046/篇
 
 
-def _pending_candidates(db, reclassify: bool, limit: int | None) -> list[Paper]:
-    """待精标候选：is_ai4se_candidate=True；默认只取未精标过的。"""
-    q = db.query(Paper).filter(Paper.is_ai4se_candidate.is_(True))
-    if not reclassify:
-        q = q.filter(Paper.status != "classified")
+def _pending_candidates(
+    db, reclassify: bool, limit: int | None, backfill_highlights: bool = False
+) -> list[Paper]:
+    """待处理论文。
+
+    - 正常模式：关键词初筛候选（is_ai4se_candidate=True），默认只取未精标过的
+    - 回填模式（M6）：已确认 AI4SE 但缺 highlights 的论文（历史数据补亮点速读）
+    """
+    q = db.query(Paper)
+    if backfill_highlights:
+        q = q.filter(
+            Paper.is_ai4se_confirmed.is_(True),
+            Paper.highlights.is_(None),
+            Paper.status == "classified",
+        )
+    else:
+        q = q.filter(Paper.is_ai4se_candidate.is_(True))
+        if not reclassify:
+            q = q.filter(Paper.status != "classified")
     q = q.order_by(Paper.id)
     if limit:
         q = q.limit(limit)
@@ -54,6 +68,7 @@ def _apply_result(db, paper: Paper, result) -> None:
     """
     paper.is_ai4se_confirmed = result.is_ai4se
     paper.summary_zh = result.summary_zh if result.is_ai4se else None
+    paper.highlights = result.highlights if result.is_ai4se else None  # M6 亮点速读
     paper.status = "classified"
     db.query(PaperTopic).filter(PaperTopic.paper_id == paper.id).delete(
         synchronize_session=False
@@ -78,14 +93,17 @@ def run_classify(
     dry_run: bool = False,
     limit: int | None = None,
     reclassify: bool = False,
+    backfill_highlights: bool = False,
 ) -> dict:
     db = SessionLocal()
     try:
-        added, existing = seed_keyword_rules(db)
-        if added:
-            logger.info("seeded %d new keyword rules", added)
-        screen = run_keyword_screen(db)
-        candidates = _pending_candidates(db, reclassify, limit)
+        screen = {"candidates": 0, "scanned": 0}
+        if not backfill_highlights:
+            added, existing = seed_keyword_rules(db)
+            if added:
+                logger.info("seeded %d new keyword rules", added)
+            screen = run_keyword_screen(db)
+        candidates = _pending_candidates(db, reclassify, limit, backfill_highlights)
         logger.info(
             "candidates to classify: %d (screen: %d candidates / %d scanned)",
             len(candidates),
@@ -110,12 +128,20 @@ def run_classify(
             return {"classified": 0, "confirmed": 0, "failed": 0, "cost_usd": 0.0}
 
         if est_cost > 0.5 and not reclassify:
-            logger.info(
-                "est cost $%.3f for %d papers (within $%.2f limit) — proceed",
-                est_cost,
-                len(candidates),
-                tracker.limit_usd,
-            )
+            if backfill_highlights:
+                logger.info(
+                    "BACKFILL highlights: %d papers, est cost $%.3f (within $%.2f limit) — proceed",
+                    len(candidates),
+                    est_cost,
+                    tracker.limit_usd,
+                )
+            else:
+                logger.info(
+                    "est cost $%.3f for %d papers (within $%.2f limit) — proceed",
+                    est_cost,
+                    len(candidates),
+                    tracker.limit_usd,
+                )
 
         run = CrawlRun(source="llm", status="running")
         db.add(run)
@@ -200,6 +226,16 @@ if __name__ == "__main__":
     parser.add_argument("--dry-run", action="store_true", help="只统计候选与成本估算，不调用 API")
     parser.add_argument("--limit", type=int, default=None, help="最多精标 N 篇（试跑）")
     parser.add_argument("--reclassify", action="store_true", help="重标已精标过的候选")
+    parser.add_argument(
+        "--backfill-highlights",
+        action="store_true",
+        help="M6：为已确认 AI4SE 但缺 highlights 的论文回填亮点速读",
+    )
     args = parser.parse_args()
-    stats = run_classify(dry_run=args.dry_run, limit=args.limit, reclassify=args.reclassify)
+    stats = run_classify(
+        dry_run=args.dry_run,
+        limit=args.limit,
+        reclassify=args.reclassify,
+        backfill_highlights=args.backfill_highlights,
+    )
     logger.info("stats: %s", stats)

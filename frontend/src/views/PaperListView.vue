@@ -1,11 +1,14 @@
 <script setup lang="ts">
-// M4 列表页：左侧筛选侧栏（主题/会议/年份/AI4SE/排序）+ el-table + 搜索 + 分页
+// M4 列表页：左侧筛选侧栏（主题/会议/年份/AI4SE/排序/阅读状态）+ el-table + 搜索 + 分页
+// M6：收藏星标 / 已读淡化 / 导出筛选结果
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { listTopics } from '../api/topics'
 import { listVenues } from '../api/venues'
 import { getTrends } from '../api/stats'
+import { exportUrl, setMark } from '../api/papers'
 import { useFilterStore } from '../stores/filterStore'
 import { usePaperStore } from '../stores/paperStore'
 import FilterSidebar from '../components/FilterSidebar.vue'
@@ -59,6 +62,35 @@ function authorsText(authors: string[]): string {
     ? authors.slice(0, 3).join(', ') + ` 等 ${authors.length} 人`
     : authors.join(', ')
 }
+
+// M6 收藏星标：toggle 后刷新列表（marks 过滤下即时移除/恢复行）
+async function toggleBookmark(row: PaperListItem) {
+  try {
+    await setMark(row.id, 'bookmark', !row.marks.bookmark)
+    paperStore.fetch()
+  } catch (e) {
+    console.error('收藏失败', e)
+  }
+}
+
+// M6 已读行淡化
+function rowClass({ row }: { row: PaperListItem }) {
+  return row.marks.read ? 'row-read' : ''
+}
+
+// M6 导出当前筛选结果（浏览器直接下载）
+function downloadExport(format: 'csv' | 'json' | 'bibtex') {
+  window.open(
+    exportUrl(format, {
+      q: filter.q || undefined,
+      topic: filter.topic || undefined,
+      venue: filter.venue || undefined,
+      year: filter.year ?? undefined,
+      is_ai4se: filter.isAi4se || undefined,
+      marks: filter.marks || undefined,
+    }),
+  )
+}
 </script>
 
 <template>
@@ -75,6 +107,18 @@ function authorsText(authors: string[]): string {
           @clear="applySearch"
         />
         <el-button type="primary" @click="applySearch">搜索</el-button>
+        <el-dropdown trigger="click" @command="downloadExport">
+          <el-button>
+            导出筛选结果<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="csv">CSV（Excel）</el-dropdown-item>
+              <el-dropdown-item command="json">JSON</el-dropdown-item>
+              <el-dropdown-item command="bibtex">BibTeX（引用）</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <span class="total">共 <span class="mono">{{ paperStore.total }}</span> 篇</span>
       </div>
 
@@ -91,8 +135,21 @@ function authorsText(authors: string[]): string {
         v-loading="paperStore.loading"
         stripe
         class="table"
+        :row-class-name="rowClass"
         @row-click="(row: PaperListItem) => goDetail(row.id)"
       >
+        <el-table-column label="收藏" width="64" align="center">
+          <template #default="{ row }">
+            <el-button
+              link
+              :class="row.marks.bookmark ? 'star-on' : 'star-off'"
+              :title="row.marks.bookmark ? '取消收藏' : '收藏'"
+              @click.stop="toggleBookmark(row)"
+            >
+              {{ row.marks.bookmark ? '⭐' : '☆' }}
+            </el-button>
+          </template>
+        </el-table-column>
         <el-table-column label="标题" min-width="360">
           <template #default="{ row }">
             <el-link type="primary" @click.stop="goDetail(row.id)">{{ row.title }}</el-link>
@@ -172,6 +229,23 @@ function authorsText(authors: string[]): string {
 }
 .muted {
   color: var(--el-text-color-placeholder);
+}
+/* M6 已读行淡化（row-class-name 作用在 tr 上） */
+.table :deep(tr.row-read) {
+  opacity: 0.55;
+}
+.table :deep(tr.row-read .el-link) {
+  text-decoration-color: transparent;
+}
+.star-on {
+  font-size: 16px;
+}
+.star-off {
+  font-size: 16px;
+  opacity: 0.55;
+}
+.star-off:hover {
+  opacity: 1;
 }
 .pager {
   margin-top: 14px;

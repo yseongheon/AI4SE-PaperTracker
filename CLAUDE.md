@@ -58,6 +58,8 @@
 | DR-018 | LLM 精标范围 | 全部论文精标 / 仅关键词初筛候选精标 | **仅关键词初筛候选** | 全库 3771 篇需 ~3700 次调用（估 $5-15）成本高；关键词初筛预计收敛到 300-600 篇，成本降 10 倍；非 AI4SE 论文无需主题标签与中文摘要 | 2026-08-17 | 用户 |
 | DR-019 | M2 执行授权 | 全程逐项询问 / M2 内自主决策 | **M2 内自主决策（用户授权）** | 用户授权 Claude 在 M2 范围内自行权衡技术决策（模型选型、规则设计、实现细节），仅重大不可逆事项（如付费全量调用）需询问；附带决策：LLM 模型选 **deepseek-chat**（DeepSeek 最便宜档，分类/中文摘要能力足够） | 2026-08-17 | 用户 |
 | DR-020 | 前端展示增强 | 基础列表 / 主题+会议趋势图表丰富展示 | **趋势图表丰富展示** | 用户补充需求：不同领域（主题）论文数量随时间的折线图、会议分布对比等，前端展示丰富；后端 /api/stats/trends 需支持按 topic/venue/year 分组的时间序列 | 2026-08-17 | 用户 |
+| DR-021 | 个性化标记存储 | 前端 localStorage / 后端 user_marks 表 | **后端 user_marks 表** | 「只看收藏/未读」的过滤必须后端做（localStorage 只能前端过滤当前页）；标记与周报/导出联动；清缓存不丢。单用户无认证，表内不加 user 维度 | 2026-08-19 | 用户 |
+| DR-022 | 亮点速读生成 | 扩展 classifier 同一 LLM 调用 / 单独二次调用 | **扩展 classifier 同一调用** | 精标时顺带产出 highlights（{contribution, limitation}），成本几乎不增加；prompt 强制 is_ai4se=true 时输出；历史数据用 `run_classify --backfill-highlights` 回填（估 $0.5-1，成本上限内） | 2026-08-19 | 用户 |
 
 ### 默认值 / 待确认项（M0 启动时逐项确认，未确认前按默认执行）
 
@@ -125,12 +127,12 @@ AI4SE-PaperTracker/
 │   │   ├── main.py            # FastAPI 实例、路由挂载、启动/关闭时挂载与卸载 scheduler
 │   │   ├── config.py          # pydantic-settings 读取 .env
 │   │   ├── db.py              # engine / SessionLocal
-│   │   ├── models/            # SQLAlchemy ORM：paper.py author.py venue.py topic.py crawl_run.py keyword_rule.py
+│   │   ├── models/            # SQLAlchemy ORM：paper.py author.py venue.py topic.py crawl_run.py keyword_rule.py mark.py
 │   │   ├── schemas/           # Pydantic 请求/响应模型（与 ORM 分离）
-│   │   ├── api/               # 路由：papers.py topics.py venues.py stats.py
-│   │   ├── services/          # 业务层（路由与爬虫共用）
+│   │   ├── api/               # 路由：papers.py topics.py venues.py stats.py export.py
+│   │   ├── services/          # 业务层（路由与爬虫共用）：paper_service.py export_service.py
 │   │   └── crawler/           # arxiv_client.py dblp_client.py matcher.py keyword_rules.py classifier.py scheduler.py rate_limiter.py
-│   ├── scripts/               # run_crawl.py run_classify.py review_pending.py seed_venues.py seed_topics.py
+│   ├── scripts/               # run_crawl.py run_classify.py review_pending.py weekly_report.py seed_venues.py seed_topics.py
 │   └── tests/                 # test_normalize.py test_matcher.py test_rate_limiter.py ...
 ├── frontend/
 │   ├── package.json           # vue3 vite typescript pinia vue-router axios element-plus echarts
@@ -152,7 +154,8 @@ AI4SE-PaperTracker/
 | 表 | 关键字段 | 说明 |
 |---|---|---|
 | **venues** | id, short_name(FSE), full_name, type(conference/journal), rank(CCF-A/B/C/none), dblp_key | CCF 名单是数据不是代码。初版仅四大 A 会；改名单=改数据 |
-| **papers** | id, title, title_normalized(索引), abstract, arxiv_id(unique 可空), arxiv_url, dblp_key(unique 可空), doi(可空), venue_id(FK 可空), year, published_at, updated_at, is_ai4se_candidate, is_ai4se_confirmed, match_status(none/matched/pending/rejected), match_candidates(JSON 可空，多候选歧义快照，人工复核用), summary_zh, status(fetched/matched/classified/ready), created_at, updated_at | 核心表。双链接展示（arXiv + DBLP/DOI）；索引：(title_normalized)、(venue_id, year) |
+| **papers** | id, title, title_normalized(索引), abstract, arxiv_id(unique 可空), arxiv_url, dblp_key(unique 可空), doi(可空), venue_id(FK 可空), year, published_at, updated_at, is_ai4se_candidate, is_ai4se_confirmed, match_status(none/matched/pending/rejected), match_candidates(JSON 可空，多候选歧义快照，人工复核用), summary_zh, highlights(JSON 可空，亮点速读 {contribution, limitation}), status(fetched/matched/classified/ready), created_at, updated_at | 核心表。双链接展示（arXiv + DBLP/DOI）；索引：(title_normalized)、(venue_id, year) |
+| **user_marks** | paper_id(FK), mark_type(bookmark/read/read_later), created_at | M6 个性化阅读标记。复合主键 (paper_id, mark_type) 幂等；单用户无 user 维度 |
 | **authors** | id, name, name_normalized(unique) | v1 仅小写/去点归一；同名歧义不处理 |
 | **paper_authors** | paper_id(FK), author_id(FK), position | N:M 关联，复合唯一 (paper_id, position) |
 | **topics** | id, slug(code_generation), name_zh(代码生成), description, parent_id(可空), is_active | 主题分类法是数据。初版 10 主题：code_generation 代码生成 / code_repair 代码修复 / code_translation 代码翻译 / code_summarization 代码摘要 / defect_detection 缺陷检测与定位 / testing 自动化测试 / analysis 软件分析 / requirements 需求工程 / llm4se_general LLM4SE 通用 / other 其他 |
@@ -224,11 +227,13 @@ AI4SE-PaperTracker/
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /api/papers | 列表：`page, page_size, q(标题/摘要搜索), topic(slug), venue(short_name), year, is_ai4se, sort(newest|venue)` |
-| GET | /api/papers/{id} | 详情：含作者、venue、topics、summary_zh、双链接 |
+| GET | /api/papers | 列表：`page, page_size, q(标题/摘要搜索), topic(slug), venue(short_name), year, is_ai4se, marks(bookmark\|read_later\|unread), sort(newest\|venue)` |
+| GET | /api/papers/{id} | 详情：含作者、venue、topics、summary_zh、highlights、双链接、marks、related 相关推荐 |
+| POST | /api/papers/{id}/marks | 设置/取消个性化标记：body `{type: bookmark\|read\|read_later, value: bool}`（幂等，返回最新标记集合） |
 | GET | /api/topics | 主题列表（含计数） |
 | GET | /api/venues | A 会列表（含计数） |
-| GET | /api/stats/trends | 趋势：`group_by=topic|venue|year, start, end` |
+| GET | /api/stats/trends | 趋势：`group_by=topic\|venue\|year, start, end` |
+| GET | /api/export | 导出：`format=csv\|json\|bibtex` + 列表全部过滤参数；CSV 带 UTF-8 BOM（Excel 兼容），BibTeX 按 venue.type 选 @inproceedings/@article，无正式版 @misc 兜底 |
 
 列表响应示例：
 
@@ -289,6 +294,8 @@ cd frontend && npm run dev
 | 手动跑一次完整爬取 | `cd backend && python -m scripts.run_crawl` |
 | 历史回填（近 180 天） | `python -m scripts.run_crawl --backfill --days 180` |
 | 批量重新分类全部论文 | `python -m scripts.run_classify` |
+| 回填亮点速读（M6） | `python -m scripts.run_classify --backfill-highlights`（已确认 AI4SE 缺亮点者，估 $0.5-1，成本上限内） |
+| 生成周报（M6） | `python -m scripts.weekly_report`（每周五 09:30 自动触发，输出 data/reports/YYYY-Www.md） |
 | 复核 DBLP 匹配歧义 | `python -m scripts.review_pending list`（`accept 论文id --idx N/--key 键`、`reject 论文id`） |
 | 导入 CCF 名单 | `python -m scripts.seed_venues` |
 | 导入主题分类法 | `python -m scripts.seed_topics` |
@@ -306,8 +313,9 @@ cd frontend && npm run dev
 | **M3 API** | 列表/详情/主题/venue/趋势端点，过滤排序分页 | Swagger 文档完整，curl 可完成全部前端所需查询 | ✅ 完成（2026-08-17） |
 | **M4 前端** | 列表页+筛选侧栏、详情页（双链接/标签/中文摘要）、趋势页（ECharts）、搜索 | 浏览→筛选→详情→趋势主路径无阻断 | ✅ 完成（2026-08-18） |
 | **M5 打磨** | 匹配歧义复核（半自动脚本）、README；Docker 不做（个人本地跑）；增量验证 1 周（DR 拍板：A②+B②+C①+D②） | 连续 1 周自动增量更新无误；数据可恢复 | ⏳ 进行中（2026-08-18，A/B/C 完成，D 观察期至 08-25） |
+| **M6 功能扩展** | AI 阅读增强（LLM 亮点速读+相关推荐）、个性化阅读（收藏/已读/稍后读+过滤）、周报推送、CSV/JSON/BibTeX 导出（DR 拍板：四包全做） | pytest 全绿；vue-tsc+build 通过；浏览器冒烟全功能可用 | ⏳ 进行中（2026-08-19，代码完成，亮点回填待跑） |
 
-**当前进度**：M0~M3 已完成（2026-08-17）。M1 验证记录：4 个 A 会 stream 全量拉取 16967 条（ICSE 7894 / sigsoft 3739 / kbse 3776 / issta 1558，缓存 7 天）；arXiv 近 3 天 4 篇幂等（重跑 new=0/updated=4）；匹配器用真实 DBLP 记录端到端验证通过。M2 验证记录：49 条关键词规则初筛 3875 篇 → 2503 候选；DeepSeek 精标 2501 篇全部完成、**0 失败、成本 $0.65**（deepseek-chat，limit $5）；确认 AI4SE **2233 篇**（58%）；主题分布（llm 标签）：llm4se_general 1761 / testing 803 / code_generation 750 / analysis 670 / defect_detection 532 / code_repair 314 / requirements 135 / code_summarization 78 / code_translation 61 / other 51，1986 篇多主题；抽样 15 篇质量验证通过。M3 验证记录：61 pytest 全绿（含 17 个 API 集成测试，TestClient+内存库）；curl 真实验证全部端点——列表（分页/搜索/主题/会议/年份/AI4SE 过滤、newest/venue 排序）、详情（作者/标签/中文摘要/双链接/404）、topics 计数（llm4se_general 1761）、venues 计数（FSE 66 / ASE 5 / ICSE 3）、trends 三分组（topic 10 条线按天零填充 / venue 3 线 / year 2 年）。M4 验证记录（用户拍板：el-table 表格 + 左侧筛选侧栏 + 多页签）：`vue-tsc` 严格模式 + `vite build` 一次通过；前后端冒烟验证经 dev 代理（localhost:5173 → 127.0.0.1:8000）全部端点可达（列表真实数据/详情/主题计数/会议计数/趋势按天序列）；trends 周/月聚合在前端完成（DR-020 方案 A，见 utils/trends.ts，年份分组恒按原样展示）；年份筛选选项取自趋势接口年份分组（数据驱动）。M5 验证记录（2026-08-18，用户拍板 A②+B②+C①+D②）：① A 匹配歧义复核——matcher 在 pending 时把多候选快照写入 papers.match_candidates（JSON 新列，migration 7c8d79d4ca91），新增 scripts/review_pending.py（list/accept --idx|--key/reject，venue 按 dblp_key 前缀反查）；现有 pending=0（matched 74 全部定案）；71 pytest 全绿（+10 复核脚本测试）；② C README 访客版完成；③ D 增量验证启动——08-18 首跑成功：arXiv 429 退避重试成功、DBLP 4 stream 全缓存命中零 API 请求、匹配 2826 条 matched=0/pending=0、幂等 new=0/updated=1，观察期至 08-25。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装）；前端 `npm run dev`（frontend/ 下，proxy 到 8000；注意 vite 默认绑定 IPv6 ::1，浏览器用 localhost 而非 127.0.0.1 访问）。
+**当前进度**：M0~M3 已完成（2026-08-17）。M1 验证记录：4 个 A 会 stream 全量拉取 16967 条（ICSE 7894 / sigsoft 3739 / kbse 3776 / issta 1558，缓存 7 天）；arXiv 近 3 天 4 篇幂等（重跑 new=0/updated=4）；匹配器用真实 DBLP 记录端到端验证通过。M2 验证记录：49 条关键词规则初筛 3875 篇 → 2503 候选；DeepSeek 精标 2501 篇全部完成、**0 失败、成本 $0.65**（deepseek-chat，limit $5）；确认 AI4SE **2233 篇**（58%）；主题分布（llm 标签）：llm4se_general 1761 / testing 803 / code_generation 750 / analysis 670 / defect_detection 532 / code_repair 314 / requirements 135 / code_summarization 78 / code_translation 61 / other 51，1986 篇多主题；抽样 15 篇质量验证通过。M3 验证记录：61 pytest 全绿（含 17 个 API 集成测试，TestClient+内存库）；curl 真实验证全部端点——列表（分页/搜索/主题/会议/年份/AI4SE 过滤、newest/venue 排序）、详情（作者/标签/中文摘要/双链接/404）、topics 计数（llm4se_general 1761）、venues 计数（FSE 66 / ASE 5 / ICSE 3）、trends 三分组（topic 10 条线按天零填充 / venue 3 线 / year 2 年）。M4 验证记录（用户拍板：el-table 表格 + 左侧筛选侧栏 + 多页签）：`vue-tsc` 严格模式 + `vite build` 一次通过；前后端冒烟验证经 dev 代理（localhost:5173 → 127.0.0.1:8000）全部端点可达（列表真实数据/详情/主题计数/会议计数/趋势按天序列）；trends 周/月聚合在前端完成（DR-020 方案 A，见 utils/trends.ts，年份分组恒按原样展示）；年份筛选选项取自趋势接口年份分组（数据驱动）。M5 验证记录（2026-08-18，用户拍板 A②+B②+C①+D②）：① A 匹配歧义复核——matcher 在 pending 时把多候选快照写入 papers.match_candidates（JSON 新列，migration 7c8d79d4ca91），新增 scripts/review_pending.py（list/accept --idx|--key/reject，venue 按 dblp_key 前缀反查）；现有 pending=0（matched 74 全部定案）；71 pytest 全绿（+10 复核脚本测试）；② C README 访客版完成；③ D 增量验证启动——08-18 首跑成功：arXiv 429 退避重试成功、DBLP 4 stream 全缓存命中零 API 请求、匹配 2826 条 matched=0/pending=0、幂等 new=0/updated=1，观察期至 08-25。M6 验证记录（2026-08-19，用户拍板：AI 阅读增强+个性化阅读+周报+导出四包）：migration 28cc6f44279b（papers.highlights JSON + user_marks 复合主键表）；classifier 输出扩展 highlights（容错解析不破坏旧格式）；101 pytest 全绿（+30：highlights 解析/related 排序、marks API 幂等与过滤、三格式导出含 BOM/转义/作者格式、周报统计与渲染）；vue-tsc+vite build 通过；curl 冒烟全通——marks toggle/列表 marks 集合/bookmark 过滤/详情 related 5 篇/CSV BOM/BibTeX 条目/JSON（修了 model_dump 的 date 序列化 bug）/周报 2026-W34.md 生成；亮点速读回填待跑（2233 篇估 $0.5-1，`run_classify --backfill-highlights`）。运行方式：后端 `python -m uv run uvicorn app.main:app --reload --port 8000`（backend/ 下，uvicorn 不全局安装；bash 中 PATH 的 python 可能是 .venv 的，此时用 `.venv/Scripts/python.exe -m uvicorn` 更稳）；前端 `npm run dev`（frontend/ 下，proxy 到 8000；注意 vite 默认绑定 IPv6 ::1，浏览器用 localhost 而非 127.0.0.1 访问）。
 
 ## 14. 数据与合规
 

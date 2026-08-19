@@ -5,6 +5,7 @@ export interface VenueBrief {
   id: number
   short_name: string
   full_name: string
+  type: string | null // conference/journal
 }
 
 export interface TopicBrief {
@@ -12,6 +13,22 @@ export interface TopicBrief {
   slug: string
   name_zh: string
 }
+
+// M6 个性化阅读标记：收藏 / 已读 / 稍后读
+export interface PaperMarks {
+  bookmark: boolean
+  read: boolean
+  read_later: boolean
+}
+
+// M6 LLM 亮点速读：一句话核心贡献 + 一句话局限
+export interface Highlights {
+  contribution: string | null
+  limitation: string | null
+}
+
+export type MarkType = 'bookmark' | 'read' | 'read_later'
+export type MarksFilter = '' | 'bookmark' | 'read_later' | 'unread'
 
 export interface PaperListItem {
   id: number
@@ -25,14 +42,17 @@ export interface PaperListItem {
   arxiv_url: string | null
   dblp_url: string | null
   doi: string | null
+  marks: PaperMarks
 }
 
 export interface PaperDetail extends PaperListItem {
   abstract: string | null
   summary_zh: string | null
+  highlights: Highlights | null
   is_ai4se_candidate: boolean
   match_status: string
   status: string
+  related: PaperListItem[]
 }
 
 export interface PaperPage {
@@ -50,6 +70,7 @@ export interface PaperListParams {
   venue?: string
   year?: number
   is_ai4se?: boolean
+  marks?: Exclude<MarksFilter, ''>
   sort?: 'newest' | 'venue'
 }
 

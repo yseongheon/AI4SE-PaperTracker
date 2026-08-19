@@ -49,6 +49,7 @@ class LlmResult:
     topics: list[str]
     summary_zh: str
     confidence: float
+    highlights: dict | None = None  # M6 亮点速读 {contribution, limitation}
 
 
 class CostTracker:
@@ -125,7 +126,7 @@ class CostTracker:
 
 _CLASSIFY_SYSTEM = """You are an expert research classifier for AI4SE (AI for Software Engineering).
 Classify the given paper. Respond with STRICT JSON only, no markdown, no extra text:
-{"is_ai4se": bool, "topics": [slug...], "summary_zh": "中文摘要（≤120字）", "confidence": 0.0-1.0}
+{"is_ai4se": bool, "topics": [slug...], "summary_zh": "中文摘要（≤120字）", "confidence": 0.0-1.0, "highlights": {"contribution": "主要贡献（≤60字）", "limitation": "主要局限（≤40字）"}}
 
 Topic slugs (only when is_ai4se=true, pick 1-3):
 - code_generation 代码生成
@@ -143,6 +144,7 @@ Rules:
 - is_ai4se=true only when AI/ML (especially LLM) is APPLIED TO software engineering tasks
   (code generation/repair/testing/analysis...). Pure ML research without SE application → false.
 - summary_zh: concise Chinese summary, ≤120 characters, always generate even when is_ai4se=false.
+- highlights (only when is_ai4se=true): 一句话核心贡献 + 一句话局限，中文，具体不空泛。
 - confidence: your certainty about the whole result.
 """
 
@@ -177,11 +179,22 @@ def parse_llm_result(text: str) -> LlmResult | None:
     valid_topics = [t for t in topics if isinstance(t, str) and t in VALID_TOPIC_SLUGS]
     if is_ai4se and not valid_topics:
         return None
+    # M6 亮点速读：容错解析（非 dict 或缺字段 → None，不因亮点缺失重试整个分类）
+    highlights: dict | None = None
+    raw_highlights = data.get("highlights")
+    if isinstance(raw_highlights, dict):
+        hl = {
+            k: (v.strip() if isinstance(v, str) else "")
+            for k, v in raw_highlights.items()
+            if k in ("contribution", "limitation")
+        }
+        highlights = hl if (hl.get("contribution") or hl.get("limitation")) else None
     return LlmResult(
         is_ai4se=is_ai4se,
         topics=valid_topics[:3],
         summary_zh=(summary_zh or "").strip(),
         confidence=round(confidence, 3),
+        highlights=highlights,
     )
 
 
@@ -215,7 +228,7 @@ class DeepSeekClassifier:
                     ],
                     response_format={"type": "json_object"},
                     temperature=0.1,
-                    max_tokens=500,
+                    max_tokens=700,
                 )
                 result = parse_llm_result(resp.choices[0].message.content or "")
                 self.cost.update(resp.usage)

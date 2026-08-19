@@ -73,6 +73,9 @@ class Paper(Base):
         JSON, nullable=True, default=None
     )
     summary_zh: Mapped[str | None] = mapped_column(Text, nullable=True)  # LLM 中文摘要
+    highlights: Mapped[dict | None] = mapped_column(  # LLM 亮点速读 {contribution, limitation}
+        JSON, nullable=True, default=None
+    )
     status: Mapped[str] = mapped_column(String(16), default=PaperStatus.FETCHED.value)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
