@@ -49,7 +49,9 @@ npm run dev
 
 打开 <http://localhost:5173>（开发模式经 Vite proxy 调用后端，无跨域配置）。
 
-### 3. 初始化与首次回填（可选）
+### 3. 初始化与首次回填（仅服务器部署者，使用者无需任何操作）
+
+> 数据由服务器统一维护（每日 09:30 自动爬取更新）。**普通使用者打开网页即可浏览全部数据，不需要、也不应该执行以下任何命令。**
 
 ```bash
 cd backend
@@ -80,6 +82,8 @@ cd backend && python -m uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 |批量重新分类|`python -m scripts.run_classify`|
 |复核 DBLP 匹配歧义|`python -m scripts.review_pending list`|
 |数据库迁移|`python -m uv run alembic upgrade head`|
+
+> 上表命令**仅服务器管理员使用**（数据维护与异常修复）。普通使用者打开网页即可，无需任何命令行操作。
 
 ## 数据与合规
 
