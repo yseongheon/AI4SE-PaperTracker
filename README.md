@@ -61,17 +61,14 @@ python -m uv run python -m scripts.run_crawl --backfill --days 180   # 历史回
 python -m uv run python -m scripts.run_classify  # 关键词初筛 + LLM 精标 + 中文摘要
 ```
 
-## 课题组多人使用（生产模式）
+## 课题组多人使用（M10 已部署阿里云服务器）
 
-```bash
-cd frontend && npm run build   # 构建前端（首次或前端改动后执行）
-cd backend && python -m uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
+**正式环境地址：<http://8.166.134.107/>**（公网直访，无需内网）
 
-- 双击根目录 `start.bat` 也会自动走生产模式（检测到 `frontend/dist` 后单端口启动）
-- **组内成员**浏览器访问 `http://<你的局域网 IP>:8000`，自行注册账号使用（账号数据互不干扰）
-- 首次使用建议在 `backend/.env` 配置 `AUTH_SECRET=<随机长字符串>`（防 token 伪造）
-- 成员连不上时，Windows 防火墙放行 8000 端口（bat 启动时有提示命令）
+- 服务器：阿里云 ECS（Ubuntu 22.04），nginx 80 反代 + systemd 常驻，数据每日自动爬取更新
+- **组内成员**浏览器打开上方地址，自行注册账号使用（账号数据互不干扰）
+- 代码更新流程（本地 build 后上传 dist，见 [CLAUDE.md](CLAUDE.md) 第 11 章）
+- 本地开发模式：双击根目录 `start.bat`（检测到 `frontend/dist` 后单端口 8000 启动，局域网访问）
 
 ## 常用命令
 
