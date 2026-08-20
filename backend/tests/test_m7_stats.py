@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models import Author, Base, Paper, PaperAuthor, PaperTopic, Topic, Venue
-from app.services import stats_service
+from app.services import institution_service, stats_service
 
 
 @pytest.fixture()
@@ -206,3 +206,56 @@ def test_institutions_top_filters_junk_and_counts_ai4se(db):
     copenhagen = [i for i in result["institutions"] if i["name"] == "university of copenhagen"][0]
     assert copenhagen["paper_count"] == 1
     assert copenhagen["ai4se_count"] == 0  # P2 非 AI4SE
+
+
+# ---- 机构详情（M12） ----
+
+
+def test_institution_detail_counts_topics_coinst(db):
+    add_paper(db, "P1", "a", topics=("code_repair",), authors=("Alice Zhang", "Bob Li"),
+              affiliations=("university of copenhagen", "university of copenhagen"))
+    add_paper(db, "P2", "b", topics=("testing",), authors=("Alice Zhang", "Carol Wu"),
+              affiliations=("university of copenhagen", "kth royal institute of technology"),
+              confirmed=False)
+    db.commit()
+
+    result = institution_service.institution_detail(db, "university of copenhagen")
+
+    assert result["paper_count"] == 2  # P1、P2 各算 1 篇（DISTINCT）
+    assert result["ai4se_count"] == 1  # P2 非 AI4SE
+    slugs = {t["slug"]: t["count"] for t in result["topics"]}
+    assert slugs == {"code_repair": 1, "testing": 1}
+    co = {c["name"]: c["count"] for c in result["co_institutions"]}
+    assert co["kth royal institute of technology"] == 1
+
+
+def test_institution_detail_coinst_distinct(db):
+    # 同一论文两个作者来自同一合作机构 → 只算 1 篇
+    add_paper(db, "P1", "a", authors=("A", "B", "C"),
+              affiliations=("university of copenhagen", "mit", "mit"))
+    db.commit()
+
+    result = institution_service.institution_detail(db, "university of copenhagen")
+
+    co = {c["name"]: c["count"] for c in result["co_institutions"]}
+    assert co["mit"] == 1
+
+
+def test_institution_detail_filters_junk_coinst(db):
+    add_paper(db, "P1", "a", authors=("A", "B"),
+              affiliations=("university of copenhagen", "peter"))
+    db.commit()
+
+    result = institution_service.institution_detail(db, "university of copenhagen")
+
+    names = {c["name"] for c in result["co_institutions"]}
+    assert "peter" not in names
+
+
+def test_institution_detail_unknown_returns_zeros(db):
+    result = institution_service.institution_detail(db, "nonexistent institution")
+
+    assert result["paper_count"] == 0
+    assert result["ai4se_count"] == 0
+    assert result["topics"] == []
+    assert result["co_institutions"] == []

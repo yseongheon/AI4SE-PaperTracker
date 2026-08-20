@@ -155,7 +155,11 @@ def test_get_paper_detail(client):
     assert r.status_code == 200
     body = r.json()
     assert body["title"] == "Bug Fixing with LLM"
-    assert body["authors"] == ["Alice", "Bob"]
+    # M12：详情作者为带机构的对象（列表仍是 string[]）
+    assert body["authors"] == [
+        {"name": "Alice", "affiliation": None},
+        {"name": "Bob", "affiliation": None},
+    ]
     assert body["summary_zh"] is None
     assert body["venue"]["short_name"] == "ICSE"
     assert body["topics"][0]["slug"] == "code_repair"

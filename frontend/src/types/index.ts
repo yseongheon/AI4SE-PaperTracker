@@ -47,7 +47,15 @@ export interface PaperListItem {
   marks: PaperMarks
 }
 
-export interface PaperDetail extends PaperListItem {
+// M12 详情页作者：姓名 + 机构（可点击跳机构详情页）
+export interface AuthorBrief {
+  name: string
+  affiliation: string | null
+}
+
+// M12：详情作者是 AuthorBrief[]（列表仍是 string[]），必须 Omit 掉父类 authors 再覆盖
+export interface PaperDetail extends Omit<PaperListItem, 'authors'> {
+  authors: AuthorBrief[]
   abstract: string | null
   summary_zh: string | null
   highlights: Highlights | null
@@ -151,6 +159,26 @@ export interface InstitutionStat {
   paper_count: number
   ai4se_count: number
   top_topics: { slug: string; name_zh: string; count: number }[]
+}
+
+// M12 机构详情：统计 + 主题分布 + 合作机构
+export interface InstitutionTopicStat {
+  slug: string
+  name_zh: string
+  count: number
+}
+
+export interface CoInstitution {
+  name: string
+  count: number
+}
+
+export interface InstitutionDetail {
+  name: string
+  paper_count: number
+  ai4se_count: number
+  topics: InstitutionTopicStat[]
+  co_institutions: CoInstitution[]
 }
 
 export interface CrossMatrix {

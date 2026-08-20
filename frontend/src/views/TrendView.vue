@@ -13,6 +13,7 @@ import type {
 const router = useRouter()
 const activeTab = ref('topic')
 const aggregate = ref<AggregateMode>('day')
+const topLimit = ref(50) // 作者/机构榜单条数（后端上限 100）
 
 const topicData = ref<TrendResponse | null>(null)
 const venueData = ref<TrendResponse | null>(null)
@@ -29,8 +30,8 @@ onMounted(async () => {
       getTrends('venue'),
       getTrends('year'),
       getCross(),
-      getAuthorsTop(30),
-      getInstitutionsTop(30),
+      getAuthorsTop(topLimit.value),
+      getInstitutionsTop(topLimit.value),
     ])
     topicData.value = t
     venueData.value = v
@@ -45,14 +46,28 @@ onMounted(async () => {
   }
 })
 
+// 榜单条数切换 → 重新拉取作者/机构榜（30/50/100，后端上限 100）
+async function loadTops() {
+  try {
+    const [a, i] = await Promise.all([
+      getAuthorsTop(topLimit.value),
+      getInstitutionsTop(topLimit.value),
+    ])
+    authors.value = a
+    institutions.value = i
+  } catch (e) {
+    console.error('榜单数据加载失败', e)
+  }
+}
+
 // 作者榜 → 列表页按作者过滤
 function goAuthor(name: string) {
   router.push({ path: '/', query: { author: name } })
 }
 
-// 机构榜 → 列表页按机构过滤
+// M12 机构榜/作者机构 → 机构详情页（命名路由自动编码机构名）
 function goInstitution(name: string) {
-  router.push({ path: '/', query: { institution: name } })
+  router.push({ name: 'institution-detail', params: { name } })
 }
 </script>
 
@@ -88,6 +103,12 @@ function goInstitution(name: string) {
         <p class="hint">颜色越深论文越多：快速定位「哪个会议更关注哪个主题」</p>
       </el-tab-pane>
       <el-tab-pane label="作者·机构榜" name="authors">
+        <div class="topbar">
+          <span class="label">榜单条数</span>
+          <el-select v-model="topLimit" size="small" style="width: 110px" @change="loadTops">
+            <el-option v-for="n in [30, 50, 100]" :key="n" :value="n" :label="`TOP ${n}`" />
+          </el-select>
+        </div>
         <el-row :gutter="16">
           <el-col :xs="24" :md="12">
             <h3 class="panel-title">作者榜</h3>
@@ -102,7 +123,14 @@ function goInstitution(name: string) {
               </el-table-column>
               <el-table-column label="机构" min-width="150">
                 <template #default="{ row }">
-                  <span class="muted">{{ row.affiliation || '—' }}</span>
+                  <el-link
+                    v-if="row.affiliation"
+                    type="primary"
+                    @click="goInstitution(row.affiliation)"
+                  >
+                    {{ row.affiliation }}
+                  </el-link>
+                  <span v-else class="muted">—</span>
                 </template>
               </el-table-column>
               <el-table-column prop="paper_count" label="论文数" width="88" align="center" />
@@ -167,6 +195,12 @@ function goInstitution(name: string) {
 .label {
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .hint {
   margin-top: 10px;

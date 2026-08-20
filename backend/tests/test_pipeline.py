@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.crawler.arxiv_client import ArxivEntry
 from app.crawler.pipeline import upsert_papers
-from app.models import Base, Paper
+from app.models import Base, InstitutionAlias, Paper
 
 
 @pytest.fixture()
@@ -60,3 +60,29 @@ def test_upsert_idempotent_rerun(db: Session):
     new_count, updated_count = upsert_papers(db, entries)
     assert (new_count, updated_count) == (0, 2)
     assert db.query(Paper).count() == 2
+
+
+def test_upsert_applies_institution_alias(db: Session):
+    """写路径套用别名库：存值落 canonical（M12）。"""
+    db.add(InstitutionAlias(alias="the university of warwick", canonical="university of warwick"))
+    db.commit()
+    entry = _entry("2607.33333", "Aliased Aff Paper")
+    entry.affiliations = ["the university of warwick"]
+
+    upsert_papers(db, [entry])
+
+    db.expire_all()
+    paper = db.query(Paper).filter_by(arxiv_id="2607.33333").one()
+    assert paper.author_links[0].affiliation == "university of warwick"
+
+
+def test_upsert_keeps_unaliased_affiliation(db: Session):
+    """未命中别名的机构原样存储。"""
+    entry = _entry("2607.44444", "Plain Aff Paper")
+    entry.affiliations = ["university of edinburgh"]
+
+    upsert_papers(db, [entry])
+
+    db.expire_all()
+    paper = db.query(Paper).filter_by(arxiv_id="2607.44444").one()
+    assert paper.author_links[0].affiliation == "university of edinburgh"

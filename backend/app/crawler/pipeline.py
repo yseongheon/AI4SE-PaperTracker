@@ -12,8 +12,14 @@ from app.config import settings
 from app.crawler.arxiv_client import ArxivClient, ArxivEntry, default_lookback_window
 from app.crawler.dblp_client import DblpClient
 from app.crawler.matcher import MatchStats, match_papers
-from app.crawler.normalize import normalize_author, normalize_institution, normalize_title
+from app.crawler.normalize import (
+    apply_institution_alias,
+    normalize_author,
+    normalize_institution,
+    normalize_title,
+)
 from app.models import Author, CrawlRun, Paper, PaperAuthor, Venue
+from app.services.institution_service import load_institution_alias_map
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +80,7 @@ def upsert_papers(db: Session, entries: list[ArxivEntry]) -> tuple[int, int]:
     new_count = 0
     updated_count = 0
     seen_ids: set[str] = set()
+    alias_map = load_institution_alias_map(db)  # 机构别名合并：一次加载，写库即落 canonical
     for entry in entries:
         arxiv_id = entry.normalized_id
         if arxiv_id in seen_ids:
@@ -96,13 +103,17 @@ def upsert_papers(db: Session, entries: list[ArxivEntry]) -> tuple[int, int]:
         paper.comment = entry.comment
         if paper.year is None and entry.published:
             paper.year = entry.published.year  # 暂无正式发表年份时先用 arXiv 年份
-        _replace_authors(db, paper, entry.authors, entry.affiliations)
+        _replace_authors(db, paper, entry.authors, entry.affiliations, alias_map)
     db.commit()
     return new_count, updated_count
 
 
 def _replace_authors(
-    db: Session, paper: Paper, author_names: list[str], affiliations: list[str] | None = None
+    db: Session,
+    paper: Paper,
+    author_names: list[str],
+    affiliations: list[str] | None = None,
+    alias_map: dict[str, str] | None = None,
 ) -> None:
     """重建作者关联（幂等）：归一化查重，重复作者复用同一 Author 记录。
 
@@ -128,7 +139,7 @@ def _replace_authors(
             PaperAuthor(
                 author=author,
                 position=position,
-                affiliation=normalize_institution(raw_aff),
+                affiliation=apply_institution_alias(normalize_institution(raw_aff), alias_map),
             )
         )
         position += 1

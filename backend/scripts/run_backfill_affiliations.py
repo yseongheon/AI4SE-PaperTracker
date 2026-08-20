@@ -17,9 +17,10 @@ import time
 from datetime import datetime
 
 from app.crawler.arxiv_client import ArxivClient
-from app.crawler.normalize import normalize_author, normalize_institution
+from app.crawler.normalize import apply_institution_alias, normalize_author, normalize_institution
 from app.db import SessionLocal
 from app.models import CrawlRun, Paper, PaperAuthor
+from app.services.institution_service import load_institution_alias_map
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -27,8 +28,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_BATCH = 200
 
 
-def _align_affiliations(authors: list[str], affiliations: list[str]) -> dict[int, str | None]:
-    """按与 _replace_authors 相同的去重规则（空/重复名跳过）对齐，返回 {position: 归一化机构}。"""
+def _align_affiliations(
+    authors: list[str], affiliations: list[str], alias_map: dict[str, str] | None = None
+) -> dict[int, str | None]:
+    """按与 _replace_authors 相同的去重规则（空/重复名跳过）对齐，返回 {position: 归一化+别名合并机构}。"""
     seen: set[str] = set()
     position = 0
     out: dict[int, str | None] = {}
@@ -37,7 +40,7 @@ def _align_affiliations(authors: list[str], affiliations: list[str]) -> dict[int
         if norm in seen or not norm:
             continue
         seen.add(norm)
-        out[position] = normalize_institution(raw_aff)
+        out[position] = apply_institution_alias(normalize_institution(raw_aff), alias_map)
         position += 1
     return out
 
@@ -47,6 +50,7 @@ def run_backfill_affiliations(
 ) -> dict:
     db = SessionLocal()
     client = ArxivClient()
+    alias_map = load_institution_alias_map(db)
     try:
         q = db.query(Paper).filter(Paper.arxiv_id.isnot(None))
         if not force:
@@ -79,7 +83,7 @@ def run_backfill_affiliations(
                     missing_entries += 1
                     logger.warning("arxiv entry not returned for %s, skip", paper.arxiv_id)
                     continue
-                aff_by_position = _align_affiliations(entry.authors, entry.affiliations)
+                aff_by_position = _align_affiliations(entry.authors, entry.affiliations, alias_map)
                 links = sorted(paper.author_links, key=lambda l: l.position)
                 if len(links) != len(aff_by_position):
                     mismatch += 1

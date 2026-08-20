@@ -3,8 +3,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.schemas.stats import TrendResponse
-from app.services import stats_service
+from app.schemas.stats import InstitutionDetailResponse, TrendResponse
+from app.services import institution_service, stats_service
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -42,6 +42,15 @@ def institutions_top(
     db: Session = Depends(get_db),
 ) -> dict:
     return stats_service.institutions_top(db, limit)
+
+
+@router.get("/institution", response_model=InstitutionDetailResponse)
+def institution_detail(
+    name: str = Query(..., min_length=1, description="机构名（归一化后的完整机构串）"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """机构详情（M12）：统计 + 主题分布 + 合作机构。未知名返回零值（不 404）。"""
+    return institution_service.institution_detail(db, name)
 
 
 @router.get("/cross")

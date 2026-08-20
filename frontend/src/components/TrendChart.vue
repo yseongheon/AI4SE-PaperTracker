@@ -37,7 +37,11 @@ const option = computed(() => ({
   legend: {
     type: 'scroll' as const,
     bottom: 0,
-    selected: legendSelected.value ?? undefined,
+    // 仅在用户点过图例时才传 selected；null（默认全显）时省略该键——
+    // 传 selected: undefined 会在 ECharts mergeOption 时把 option.selected 覆盖为
+    // undefined（init 有 || {} 兜底、merge 没有），导致 legendFilter 里
+    // isSelected 读 undefined.hasOwnProperty 崩溃（点按周/按月即触发）。
+    ...(legendSelected.value ? { selected: legendSelected.value } : {}),
   },
   grid: { left: 50, right: 24, top: 30, bottom: 48 },
   // 柱状图留出柱宽边距，折线图贴边（时间序列）

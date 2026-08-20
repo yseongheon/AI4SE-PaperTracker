@@ -1,6 +1,7 @@
 import http from './http'
 import type {
-  AuthorStat, CoauthorGraph, CrossMatrix, InstitutionStat, TrendResponse, WordItem,
+  AuthorStat, CoauthorGraph, CrossMatrix, InstitutionDetail, InstitutionStat,
+  TrendResponse, WordItem,
 } from '../types'
 
 // 趋势：group_by=topic|venue|year；后端按天返回原始计数，聚合粒度由前端决定（DR-020）
@@ -36,6 +37,12 @@ export async function getInstitutionsTop(limit = 50): Promise<InstitutionStat[]>
     params: { limit },
   })
   return data.institutions
+}
+
+// M12 机构详情：统计 + 主题分布 + 合作机构（axios 自动编码机构名）
+export async function getInstitutionDetail(name: string): Promise<InstitutionDetail> {
+  const { data } = await http.get<InstitutionDetail>('/stats/institution', { params: { name } })
+  return data
 }
 
 export async function getCross(): Promise<CrossMatrix> {

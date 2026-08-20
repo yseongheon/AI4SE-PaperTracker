@@ -1,6 +1,31 @@
-"""统计响应模型（DR-020 趋势图数据）。"""
+"""统计响应模型（DR-020 趋势图数据；M12 机构详情）。"""
 
 from pydantic import BaseModel
+
+
+class InstitutionTopicStat(BaseModel):
+    """机构主题分布（M12）：slug/name_zh/count（DISTINCT 论文计数）。"""
+
+    slug: str
+    name_zh: str
+    count: int
+
+
+class CoInstitution(BaseModel):
+    """合作机构（M12）：机构名 + 共同论文数（DISTINCT）。"""
+
+    name: str
+    count: int
+
+
+class InstitutionDetailResponse(BaseModel):
+    """机构详情（M12）：统计 + 主题分布 + 合作机构。"""
+
+    name: str
+    paper_count: int
+    ai4se_count: int
+    topics: list[InstitutionTopicStat]
+    co_institutions: list[CoInstitution]
 
 
 class TrendSeries(BaseModel):

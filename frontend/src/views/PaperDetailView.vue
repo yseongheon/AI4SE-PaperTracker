@@ -93,6 +93,11 @@ function goAuthor(name: string) {
   router.push({ path: '/', query: { author: name } })
 }
 
+// M12 作者机构 → 机构详情页（命名路由自动编码机构名）
+function goInstitution(name: string) {
+  router.push({ name: 'institution-detail', params: { name } })
+}
+
 const DEEP_LABELS: Record<string, string> = {
   background: '背景',
   problem: '问题',
@@ -279,18 +284,23 @@ const STATUS_TEXT: Record<string, string> = {
 
       <el-card v-if="paper.authors.length" class="card" shadow="never">
         <template #header>
-          <span class="card-title">作者（点击查看该作者全部论文）</span>
+          <span class="card-title">作者（点击姓名看该作者论文；点击机构看机构详情）</span>
         </template>
         <p class="authors">
-          <el-link
-            v-for="(a, i) in paper.authors"
-            :key="i"
-            type="primary"
-            class="author-link"
-            @click="goAuthor(a)"
-          >
-            {{ a }}<span v-if="i < paper.authors.length - 1">、</span>
-          </el-link>
+          <span v-for="(a, i) in paper.authors" :key="i" class="author-item">
+            <el-link type="primary" class="author-link" @click="goAuthor(a.name)">
+              {{ a.name }}
+            </el-link>
+            <el-link
+              v-if="a.affiliation"
+              type="primary"
+              class="author-aff"
+              @click="goInstitution(a.affiliation)"
+            >
+              · {{ a.affiliation }}
+            </el-link>
+            <span v-if="i < paper.authors.length - 1">、</span>
+          </span>
         </p>
       </el-card>
 
@@ -448,9 +458,18 @@ const STATUS_TEXT: Record<string, string> = {
   flex-wrap: wrap;
   gap: 4px;
 }
+.author-item {
+  display: inline-flex;
+  align-items: baseline;
+}
 .author-link {
   text-decoration-thickness: 1px;
   font-weight: 500;
+}
+.author-aff {
+  text-decoration-thickness: 1px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 .deep-btn {
   float: right;

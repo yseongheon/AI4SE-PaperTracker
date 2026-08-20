@@ -2,6 +2,7 @@
 from app.models.author import Author
 from app.models.base import Base
 from app.models.crawl_run import CrawlRun
+from app.models.institution_alias import InstitutionAlias
 from app.models.keyword_rule import KeywordRule
 from app.models.mark import MarkType, UserMark
 from app.models.paper import MatchStatus, Paper, PaperAuthor, PaperStatus
@@ -13,6 +14,7 @@ __all__ = [
     "Author",
     "Base",
     "CrawlRun",
+    "InstitutionAlias",
     "KeywordRule",
     "MarkType",
     "MatchStatus",

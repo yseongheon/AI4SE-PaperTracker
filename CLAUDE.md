@@ -67,6 +67,7 @@
 | DR-027 | M9 认证方案 | 自建 HMAC token / python-jose JWT / 服务端 session 表 | **自建 HMAC token（零新依赖）** | 标准库 hmac/hashlib/secrets 实现；密码 pbkdf2（sha256、10 万次迭代、随机盐）；token 无状态 30 天有效；课题组内网规模完全够用 | 2026-08-19 | 用户 |
 | DR-028 | M9 个人化范围 | 周报+画像页 / 只画像 / 只账号 | **周报 + 画像页** | 每周五为收藏数>0 的用户生成个人收藏周报（data/reports/personal/）；个人画像页（统计+收藏主题分布+最近收藏） | 2026-08-19 | 用户 |
 | DR-029 | M11 机构功能 | 数据源 arXiv/S2；存储 字符串列/独立机构表；归一化 规则/LLM；UI 页签/并排 | **arXiv affiliation + paper_authors.affiliation 字符串列 + 规则归一化 + 作者榜同页并排** | arXiv 免费即时（S2 走代理被限流、arXiv 机构覆盖仅 ~2%）；字符串列改动最小；规则归一化免费（用户拍板不用 LLM）；机构计数一律 COUNT(DISTINCT)（同机构多作者合著只算 1 篇）；垃圾机构（作者名误填）用白名单+多 token 规则过滤；引用数 S2 暂不补（api.semanticscholar.org 被墙） | 2026-08-20 | 用户 |
+| DR-030 | M12 机构功能二期 | A 会机构数据源 arXiv/Crossref；别名库 DB 表/代码字典；详情页路径/查询参数；作者机构顺带/不做 | **Crossref 补全 A 会论文机构 + institution_aliases DB 表 + /institutions/:name 详情页 + 论文详情作者机构** | A 会 74 篇全有 DOI 但机构几乎全缺（1/74），Crossref 免费可达（0.5s/请求）一次性补齐至 74/74；别名库数据驱动（课题组可自助增删别名不改代码，精确全串匹配）；详情页命名路由自动编码机构名（避免手拼 path 参数）；论文详情 authors 由 string[] 改为 {name, affiliation} 对象（列表仍是 string[]）；机构覆盖 2.4%→4.3%（arXiv 数据源本身限制，S2 通了可再扩） | 2026-08-20 | 用户 |
 
 ### 默认值 / 待确认项（M0 启动时逐项确认，未确认前按默认执行）
 
@@ -170,6 +171,7 @@ AI4SE-PaperTracker/
 | **paper_topics** | paper_id, topic_id, confidence, method(keyword/llm), created_at | 多标签+置信度+标注来源（可追溯） |
 | **crawl_runs** | id, source(arxiv/dblp/llm), started_at, finished_at, status, fetched_count, new_count, updated_count, failed_count, error | 每次运行审计日志，支持失败重跑 |
 | **keyword_rules** | id, topic_id(可空), pattern, field(title/abstract/any), enabled | 关键词初筛规则可配置化 |
+| **institution_aliases** | id, alias(unique 索引), canonical(索引), note, is_active | 机构别名合并库（数据不是代码）：alias 精确映射 canonical，写库落 canonical（normalize.apply_institution_alias）；课题组可自助增删 |
 
 **预印本 ↔ 正式发表版关联规则**（全项目最关键的逻辑）：
 
@@ -236,7 +238,7 @@ AI4SE-PaperTracker/
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | /api/papers | 列表：`page, page_size, q, field(any\|title\|abstract), topic, venue, year, year_from, year_to, author, is_ai4se, marks(bookmark\|read_later\|unread), min_citations, sort(newest\|venue\|citations)` |
-| GET | /api/papers/{id} | 详情：含作者、venue、topics、summary_zh、highlights、双链接、pdf_url、marks、related 相关推荐 |
+| GET | /api/papers/{id} | 详情：含作者（M12：`[{name, affiliation}]` 对象，可点机构）、venue、topics、summary_zh、highlights、双链接、pdf_url、marks、related 相关推荐 |
 | POST | /api/papers/{id}/marks | 设置/取消个性化标记：body `{type: bookmark\|read\|read_later, value: bool}`（幂等，返回最新标记集合） |
 | GET | /api/papers/{id}/bibtex | 单篇 BibTeX（M7 引用复制/下载） |
 | POST | /api/papers/{id}/deep-summary | AI 深度摘要（M7，DR-024）：按需生成+缓存（背景/问题/方法/实验/结论）；已生成直接返回缓存 |
@@ -247,6 +249,7 @@ AI4SE-PaperTracker/
 | GET | /api/stats/authors | 作者 TOP 榜（M7）：论文数/AI4SE 数/主要主题 |
 | GET | /api/stats/cross | 会议×主题交叉矩阵（M7 热力图） |
 | GET | /api/stats/coauthor | 作者合作网络（M7）：TOP N 活跃作者共著边 |
+| GET | /api/stats/institution | 机构详情（M12）：`?name=xxx`（归一化机构串，axios 自动编码）；返回统计 + 主题分布 + 合作机构；未知名返回零值 200 |
 | GET | /api/export | 导出：`format=csv\|json\|bibtex` + 列表全部过滤参数 + `ids=1,2,3`（M7 导出选中）；CSV 带 UTF-8 BOM，BibTeX 按 venue.type 选条目类型 |
 | POST | /api/auth/register | M9 注册：`{username, email?, password}`（pbkdf2 哈希）→ `{token, user}` |
 | POST | /api/auth/login | M9 登录：`{username\|email, password}` → `{token, user}`（HMAC token 30 天） |

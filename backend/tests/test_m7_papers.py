@@ -102,6 +102,17 @@ def test_filter_by_institution_no_match(client):
     assert r.json()["total"] == 0
 
 
+def test_detail_authors_are_objects_with_affiliation(client):
+    """M12：详情作者为带机构的对象（首作者 Xiaoyu Wang 有机构，Alice 无）。"""
+    r = client.get("/api/papers/1")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["authors"] == [
+        {"name": "Xiaoyu Wang", "affiliation": "pennsylvania state university"},
+        {"name": "Alice Zhang", "affiliation": None},
+    ]
+
+
 def test_search_field_title_only(client):
     r = client.get("/api/papers", params={"q": "survey", "field": "title"})
     assert r.status_code == 200

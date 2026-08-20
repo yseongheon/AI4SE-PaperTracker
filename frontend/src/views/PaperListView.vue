@@ -7,7 +7,7 @@ import { storeToRefs } from 'pinia'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { listTopics } from '../api/topics'
 import { listVenues } from '../api/venues'
-import { getTrends } from '../api/stats'
+import { getTrends, getInstitutionsTop } from '../api/stats'
 import { exportUrl, setMark } from '../api/papers'
 import { useFilterStore } from '../stores/filterStore'
 import { usePaperStore } from '../stores/paperStore'
@@ -27,6 +27,7 @@ const years = ref<number[]>([])
 const searchText = ref(filter.q)
 const selectedIds = ref<number[]>([]) // M7 多选导出
 const advVisible = ref(false) // M7 高级筛选弹窗
+const instOptions = ref<{ name: string; paper_count: number }[]>([]) // M12 机构自动补全数据源（机构 TOP 榜）
 
 // M7 已应用的高级筛选摘要（field/author/年份区间/最低被引 非默认值即展示）
 const advSummary = computed(() => {
@@ -65,10 +66,16 @@ onMounted(async () => {
   }
   try {
     // 年份选项来自趋势接口的年份分组（数据驱动，不硬编码）
-    const [t, v, y] = await Promise.all([listTopics(), listVenues(), getTrends('year')])
+    const [t, v, y, inst] = await Promise.all([
+      listTopics(),
+      listVenues(),
+      getTrends('year'),
+      getInstitutionsTop(100),
+    ])
     topics.value = t
     venues.value = v
     years.value = y.labels.map(Number)
+    instOptions.value = inst.map((s) => ({ name: s.name, paper_count: s.paper_count }))
   } catch (e) {
     console.error('侧栏数据加载失败', e)
   }
@@ -143,6 +150,20 @@ function filterByAuthor(name: string) {
   filter.author = name
   filter.page = 1
 }
+
+// M12 机构自动补全：从机构 TOP 榜按输入过滤（机构是精确全串匹配，下拉选才能保证命中）
+function queryInstitutions(
+  query: string,
+  cb: (items: { value: string; paper_count: number }[]) => void,
+) {
+  const q = query.trim().toLowerCase()
+  cb(
+    instOptions.value
+      .filter((s) => s.name.toLowerCase().includes(q))
+      .slice(0, 20)
+      .map((s) => ({ value: s.name, paper_count: s.paper_count })),
+  )
+}
 </script>
 
 <template>
@@ -216,6 +237,26 @@ function filterByAuthor(name: string) {
               clearable
               @keyup.enter="applyAdvFilter"
             />
+          </div>
+          <div class="adv-row">
+            <span class="adv-label">机构</span>
+            <el-autocomplete
+              v-model="filter.institution"
+              class="inst-input"
+              :fetch-suggestions="queryInstitutions"
+              placeholder="机构名称（精确匹配，从下拉选择）"
+              clearable
+              @select="applyAdvFilter"
+              @keyup.enter="applyAdvFilter"
+            >
+              <template #default="{ item }">
+                <span>{{ item.value }}</span>
+                <span
+                  class="inst-count"
+                  style="color: var(--el-text-color-secondary); font-size: 12px; margin-left: 6px"
+                >（{{ item.paper_count }} 篇）</span>
+              </template>
+            </el-autocomplete>
           </div>
           <div class="adv-row">
             <span class="adv-label">年份区间</span>
@@ -408,6 +449,9 @@ function filterByAuthor(name: string) {
 }
 .adv-sep {
   color: var(--el-text-color-placeholder);
+}
+.inst-input {
+  flex: 1;
 }
 .adv-actions {
   display: flex;

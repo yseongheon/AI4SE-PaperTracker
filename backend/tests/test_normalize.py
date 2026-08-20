@@ -1,5 +1,6 @@
 """标题/作者/机构归一化测试：跨源匹配键的正确性。"""
 from app.crawler.normalize import (
+    apply_institution_alias,
     author_last_name,
     normalize_author,
     normalize_institution,
@@ -75,3 +76,26 @@ def test_normalize_institution_empty_is_none():
     assert normalize_institution("") is None
     assert normalize_institution("   ") is None
     assert normalize_institution(None) is None
+
+
+# ---- 机构别名合并 ----
+
+_ALIAS = {"the university of warwick": "university of warwick"}
+
+
+def test_apply_institution_alias_hit():
+    assert apply_institution_alias("the university of warwick", _ALIAS) == "university of warwick"
+
+
+def test_apply_institution_alias_miss_unchanged():
+    assert apply_institution_alias("university of edinburgh", _ALIAS) == "university of edinburgh"
+
+
+def test_apply_institution_alias_empty_or_none_map():
+    assert apply_institution_alias("university of warwick", {}) == "university of warwick"
+    assert apply_institution_alias("university of warwick", None) == "university of warwick"
+
+
+def test_apply_institution_alias_none_or_empty_input():
+    assert apply_institution_alias(None, _ALIAS) is None
+    assert apply_institution_alias("", _ALIAS) == ""

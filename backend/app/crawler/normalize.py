@@ -68,6 +68,18 @@ def normalize_institution(raw: str | None) -> str | None:
     return t or None
 
 
+def apply_institution_alias(norm: str | None, alias_map: dict[str, str] | None = None) -> str | None:
+    """机构别名合并：alias_map{归一化机构串: 权威名} 精确映射；无映射原样返回。
+
+    纯函数（不碰 DB）——alias_map 由调用方从 institution_aliases 表加载
+    （institution_service.load_institution_alias_map）。写库时在 normalize_institution
+    之后套用，使存量与增量都落 canonical。
+    """
+    if not norm or not alias_map:
+        return norm
+    return alias_map.get(norm, norm)
+
+
 def author_last_name(name: str) -> str:
     """取作者姓氏（末段）：DBLP 匹配时做姓氏粗校验用。
 

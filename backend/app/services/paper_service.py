@@ -12,7 +12,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Author, MarkType, Paper, PaperAuthor, PaperTopic, Topic, UserMark, Venue
-from app.schemas.paper import Highlights, PaperDetail, PaperListItem, PaperMarks
+from app.schemas.paper import AuthorBrief, Highlights, PaperDetail, PaperListItem, PaperMarks
 
 # 列表/详情共用 eager load，避免 N+1（作者、主题、会议）
 _LIST_OPTIONS = (
@@ -233,8 +233,14 @@ def get_paper(db: Session, paper_id: int, user_id: int | None = None) -> PaperDe
         raise HTTPException(status_code=404, detail=f"paper {paper_id} not found")
     marks_map = _marks_map(db, [paper_id], user_id)
     item = _to_item(paper, marks_map.get(paper_id))
+    # M12：作者由 string[] 覆盖为带机构的 AuthorBrief[]（列表项 authors 仍是 string[]）
+    data = item.model_dump()
+    data["authors"] = [
+        AuthorBrief(name=link.author.name, affiliation=link.affiliation)
+        for link in sorted(paper.author_links, key=lambda l: l.position)
+    ]
     return PaperDetail(
-        **item.model_dump(),
+        **data,
         abstract=paper.abstract,
         summary_zh=paper.summary_zh,
         highlights=(

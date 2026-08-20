@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { TopicBrief } from '../types'
 
-const props = defineProps<{ topic: TopicBrief }>()
+// 只依赖 slug/name_zh：机构详情主题（无 id）也可复用（M12）
+const props = defineProps<{ topic: { slug: string; name_zh: string } }>()
 
 type TagType = '' | 'success' | 'warning' | 'info' | 'danger'
 // 10 主题配色（与 topics 表 slug 对应）

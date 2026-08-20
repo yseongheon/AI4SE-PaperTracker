@@ -56,9 +56,20 @@ class PaperListItem(BaseModel):
     marks: PaperMarks = PaperMarks()
 
 
-class PaperDetail(PaperListItem):
-    """详情：列表字段 + 摘要/中文摘要/亮点速读/匹配状态 + 相关论文推荐。"""
+class AuthorBrief(BaseModel):
+    """详情页作者（M12 机构功能）：姓名 + 机构（可点击跳机构详情页）。"""
 
+    name: str
+    affiliation: str | None = None
+
+
+class PaperDetail(PaperListItem):
+    """详情：列表字段 + 摘要/中文摘要/亮点速读/匹配状态 + 相关论文推荐。
+
+    authors 覆盖为带机构的 AuthorBrief[]（列表页仍为 string[]，见 PaperListItem）。
+    """
+
+    authors: list[AuthorBrief]  # noqa: F811（覆盖父类字段类型）
     abstract: str | None
     summary_zh: str | None
     highlights: Highlights | None = None
