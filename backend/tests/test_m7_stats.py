@@ -17,7 +17,7 @@ def db():
 
 
 def add_paper(db, title, abstract, *, topics=(), venue=None, confirmed=True, year=2026,
-              authors=()):
+              authors=(), affiliations=()):
     p = Paper(
         title=title, title_normalized=title.lower(), abstract=abstract,
         year=year, is_ai4se_confirmed=confirmed, venue=venue, status="classified",
@@ -37,7 +37,10 @@ def add_paper(db, title, abstract, *, topics=(), venue=None, confirmed=True, yea
             a = Author(name=name, name_normalized=name.lower())
             db.add(a)
             db.flush()
-        db.add(PaperAuthor(paper_id=p.id, author_id=a.id, position=i))
+        db.add(PaperAuthor(
+            paper_id=p.id, author_id=a.id, position=i,
+            affiliation=affiliations[i] if affiliations and i < len(affiliations) else None,
+        ))
     return p
 
 
@@ -154,3 +157,52 @@ def test_coauthor_limit_trims_nodes(db):
     result = stats_service.coauthor(db, limit=3)
 
     assert len(result["nodes"]) == 3
+
+
+# ---- 机构榜 + 作者机构 ----
+
+
+def test_authors_top_affiliation(db):
+    add_paper(db, "P1", "a", authors=("Alice Zhang",), affiliations=("sun yat-sen university",))
+    db.commit()
+
+    result = stats_service.authors_top(db, limit=10)
+
+    assert result["authors"][0]["affiliation"] == "sun yat-sen university"
+
+
+def test_authors_top_skips_junk_affiliation(db):
+    # arXiv 机构自由文本常把作者名填进机构栏（如 "peter"），作者榜不应展示
+    add_paper(db, "P1", "a", authors=("Alice Zhang",), affiliations=("peter",))
+    db.commit()
+
+    result = stats_service.authors_top(db, limit=10)
+
+    assert result["authors"][0]["affiliation"] is None
+
+
+def test_institutions_top_distinct_papers(db):
+    # 同一论文两个作者来自同一机构 → paper_count 只算 1 篇（COUNT DISTINCT）
+    add_paper(db, "P1", "a", authors=("Alice Zhang", "Bob Li"),
+              affiliations=("university of copenhagen", "university of copenhagen"))
+    db.commit()
+
+    result = stats_service.institutions_top(db, limit=10)
+
+    insts = {i["name"]: i for i in result["institutions"]}
+    assert insts["university of copenhagen"]["paper_count"] == 1
+
+
+def test_institutions_top_filters_junk_and_counts_ai4se(db):
+    add_paper(db, "P1", "a", authors=("Alice Zhang",), affiliations=("peter",))
+    add_paper(db, "P2", "b", authors=("Bob Li",), affiliations=("university of copenhagen",),
+              confirmed=False)
+    db.commit()
+
+    result = stats_service.institutions_top(db, limit=10)
+
+    names = {i["name"] for i in result["institutions"]}
+    assert "peter" not in names  # 垃圾项过滤
+    copenhagen = [i for i in result["institutions"] if i["name"] == "university of copenhagen"][0]
+    assert copenhagen["paper_count"] == 1
+    assert copenhagen["ai4se_count"] == 0  # P2 非 AI4SE

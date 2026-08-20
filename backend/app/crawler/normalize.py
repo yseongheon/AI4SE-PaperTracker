@@ -35,6 +35,39 @@ def normalize_author(name: str | None) -> str:
     return t.strip()
 
 
+# 机构常见缩写展开（顺序敏感：每个缩写先匹配"带句点"吞掉句点，再匹配"裸缩写"兜底。
+# 不能只用 \buniv\.?\b：后跟逗号/分号时（如 "Univ.,"）句点后无词边界，\b 不成立导致句点残留）
+_INSTITUTION_ABBREV = [
+    (re.compile(r"\buniv\."), "university"),
+    (re.compile(r"\buniv\b"), "university"),
+    (re.compile(r"\binst\."), "institute"),
+    (re.compile(r"\binst\b"), "institute"),
+    (re.compile(r"\bdept\."), "department"),
+    (re.compile(r"\bdept\b"), "department"),
+    (re.compile(r"\bsch\."), "school"),
+    (re.compile(r"\bsch\b"), "school"),
+]
+
+
+def normalize_institution(raw: str | None) -> str | None:
+    """机构名归一化：小写、展开常见缩写、折叠空白、去尾标点；空返回 None。
+
+    与 normalize_author 不同——必须保留 '&' 与句点（缩写展开依赖），故单独实现。
+    规则化合并（免费，用户拍板）：能合并 "Tsinghua Univ." / "Tsinghua University" 等常见
+    变体；不做 "Microsoft" vs "Microsoft Research" 这类语义合并（后续可加规则细化）。
+    """
+    if not raw:
+        return None
+    t = raw.lower()
+    for pattern, repl in _INSTITUTION_ABBREV:
+        t = pattern.sub(repl, t)
+    t = t.replace("&", "and")
+    t = _WS.sub(" ", t).strip()
+    t = t.rstrip(".,;:")
+    t = _WS.sub(" ", t).strip()
+    return t or None
+
+
 def author_last_name(name: str) -> str:
     """取作者姓氏（末段）：DBLP 匹配时做姓氏粗校验用。
 

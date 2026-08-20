@@ -3,11 +3,11 @@
 // M7 拍板：精简分析图表（只留作者榜+热力），全宽大图
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getAuthorsTop, getCross, getTrends } from '../api/stats'
+import { getAuthorsTop, getCross, getInstitutionsTop, getTrends } from '../api/stats'
 import ChartHeatmap from '../components/ChartHeatmap.vue'
 import TrendChart from '../components/TrendChart.vue'
 import type {
-  AggregateMode, AuthorStat, CrossMatrix, TrendResponse,
+  AggregateMode, AuthorStat, CrossMatrix, InstitutionStat, TrendResponse,
 } from '../types'
 
 const router = useRouter()
@@ -19,22 +19,25 @@ const venueData = ref<TrendResponse | null>(null)
 const yearData = ref<TrendResponse | null>(null)
 const cross = ref<CrossMatrix | null>(null)
 const authors = ref<AuthorStat[]>([])
+const institutions = ref<InstitutionStat[]>([])
 const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const [t, v, y, c, a] = await Promise.all([
+    const [t, v, y, c, a, i] = await Promise.all([
       getTrends('topic'),
       getTrends('venue'),
       getTrends('year'),
       getCross(),
       getAuthorsTop(30),
+      getInstitutionsTop(30),
     ])
     topicData.value = t
     venueData.value = v
     yearData.value = y
     cross.value = c
     authors.value = a
+    institutions.value = i
   } catch (e) {
     console.error('分析数据加载失败', e)
   } finally {
@@ -45,6 +48,11 @@ onMounted(async () => {
 // 作者榜 → 列表页按作者过滤
 function goAuthor(name: string) {
   router.push({ path: '/', query: { author: name } })
+}
+
+// 机构榜 → 列表页按机构过滤
+function goInstitution(name: string) {
+  router.push({ path: '/', query: { institution: name } })
 }
 </script>
 
@@ -60,11 +68,11 @@ function goAuthor(name: string) {
     </div>
     <el-tabs v-model="activeTab" type="border-card">
       <el-tab-pane label="主题趋势" name="topic">
-        <TrendChart group-by="topic" :data="topicData" :aggregate="aggregate" />
+        <TrendChart group-by="topic" :data="topicData" :aggregate="aggregate" chart-type="bar" />
         <p class="hint">点击图例系列名：只看该主题；再次点击：恢复全部</p>
       </el-tab-pane>
       <el-tab-pane label="会议趋势" name="venue">
-        <TrendChart group-by="venue" :data="venueData" :aggregate="aggregate" />
+        <TrendChart group-by="venue" :data="venueData" :aggregate="aggregate" chart-type="bar" />
         <p class="hint">点击图例系列名：只看该会议；再次点击：恢复全部</p>
       </el-tab-pane>
       <el-tab-pane label="年份分布" name="year">
@@ -79,31 +87,68 @@ function goAuthor(name: string) {
         />
         <p class="hint">颜色越深论文越多：快速定位「哪个会议更关注哪个主题」</p>
       </el-tab-pane>
-      <el-tab-pane label="作者榜" name="authors">
-        <el-table :data="authors" stripe>
-          <el-table-column type="index" label="#" width="56" align="center" />
-          <el-table-column label="学者" min-width="220">
-            <template #default="{ row }">
-              <el-tooltip :content="`查看 ${row.name} 的全部论文`" placement="top">
-                <el-link type="primary" @click="goAuthor(row.name)">{{ row.name }}</el-link>
-              </el-tooltip>
-            </template>
-          </el-table-column>
-          <el-table-column prop="paper_count" label="论文数" width="100" align="center" />
-          <el-table-column prop="ai4se_count" label="AI4SE 论文" width="120" align="center" />
-          <el-table-column label="主要主题" min-width="300">
-            <template #default="{ row }">
-              <el-tag
-                v-for="t in row.top_topics"
-                :key="t.slug"
-                size="small"
-                class="topic-tag"
-              >
-                {{ t.name_zh }} ({{ t.count }})
-              </el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+      <el-tab-pane label="作者·机构榜" name="authors">
+        <el-row :gutter="16">
+          <el-col :xs="24" :md="12">
+            <h3 class="panel-title">作者榜</h3>
+            <el-table :data="authors" stripe>
+              <el-table-column type="index" label="#" width="56" align="center" />
+              <el-table-column label="学者" min-width="160">
+                <template #default="{ row }">
+                  <el-tooltip :content="`查看 ${row.name} 的全部论文`" placement="top">
+                    <el-link type="primary" @click="goAuthor(row.name)">{{ row.name }}</el-link>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+              <el-table-column label="机构" min-width="150">
+                <template #default="{ row }">
+                  <span class="muted">{{ row.affiliation || '—' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="paper_count" label="论文数" width="88" align="center" />
+              <el-table-column prop="ai4se_count" label="AI4SE" width="88" align="center" />
+              <el-table-column label="主要主题" min-width="200">
+                <template #default="{ row }">
+                  <el-tag
+                    v-for="t in row.top_topics"
+                    :key="t.slug"
+                    size="small"
+                    class="topic-tag"
+                  >
+                    {{ t.name_zh }} ({{ t.count }})
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <h3 class="panel-title">机构榜</h3>
+            <el-table :data="institutions" stripe>
+              <el-table-column type="index" label="#" width="56" align="center" />
+              <el-table-column label="机构" min-width="200">
+                <template #default="{ row }">
+                  <el-tooltip :content="`查看 ${row.name} 的全部论文`" placement="top">
+                    <el-link type="primary" @click="goInstitution(row.name)">{{ row.name }}</el-link>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+              <el-table-column prop="paper_count" label="论文数" width="88" align="center" />
+              <el-table-column prop="ai4se_count" label="AI4SE" width="88" align="center" />
+              <el-table-column label="主要主题" min-width="200">
+                <template #default="{ row }">
+                  <el-tag
+                    v-for="t in row.top_topics"
+                    :key="t.slug"
+                    size="small"
+                    class="topic-tag"
+                  >
+                    {{ t.name_zh }} ({{ t.count }})
+                  </el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-col>
+        </el-row>
       </el-tab-pane>
     </el-tabs>
   </div>
@@ -130,5 +175,15 @@ function goAuthor(name: string) {
 }
 .topic-tag {
   margin: 2px 4px 2px 0;
+}
+.panel-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.muted {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 </style>

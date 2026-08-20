@@ -28,6 +28,7 @@ class ArxivEntry:
     title: str
     abstract: str
     authors: list[str] = field(default_factory=list)
+    affiliations: list[str] = field(default_factory=list)  # 与 authors 平行，每作者机构（可能为空串）
     published: datetime | None = None
     updated: datetime | None = None
     journal_ref: str | None = None  # 正式发表出处线索（如 "Accepted at ICSE 2026"）
@@ -74,6 +75,24 @@ class ArxivClient:
                 start += MAX_PAGE
         return entries
 
+    def fetch_by_ids(self, ids: list[str]) -> list[ArxivEntry]:
+        """按 arXiv id 列表拉取元数据（机构回填用）。
+
+        关键坑（实测）：id_list 查询必须显式传 max_results，否则 API 默认只返回 10 条；
+        响应顺序不保证，调用方需按 normalized_id 匹配。入参用裸 id（去版本号）。
+        """
+        if not ids:
+            return []
+        with httpx.Client() as client:
+            resp = get_with_retry(
+                client,
+                ARXIV_API_URL,
+                self.policy,
+                params={"id_list": ",".join(ids), "max_results": len(ids)},
+                timeout=60.0,
+            )
+        return self._parse_feed(resp.text)
+
     @staticmethod
     def _parse_feed(xml_text: str) -> list[ArxivEntry]:
         root = ET.fromstring(xml_text)
@@ -111,11 +130,19 @@ class ArxivClient:
             except ValueError:
                 return None
 
-        authors = [
-            " ".join(a.text.split())
-            for a in entry.findall("a:author/a:name", ATOM_NS)
-            if a.text
-        ]
+        # 作者+机构平行解析：缺失用 "" 占位保持 position 对齐（不能过滤空 name，否则错位）
+        authors, affiliations = [], []
+        for author_el in entry.findall("a:author", ATOM_NS):
+            name_el = author_el.find("a:name", ATOM_NS)
+            aff_el = author_el.find("ar:affiliation", ATOM_NS)
+            authors.append(
+                " ".join(name_el.text.split())
+                if name_el is not None and name_el.text else ""
+            )
+            affiliations.append(
+                " ".join(aff_el.text.split())
+                if aff_el is not None and aff_el.text else ""
+            )
         categories = [
             c.get("term", "")
             for c in entry.findall("a:category", ATOM_NS)
@@ -133,6 +160,7 @@ class ArxivClient:
             title=text("a:title"),
             abstract=text("a:summary"),
             authors=authors,
+            affiliations=affiliations,
             published=dt("a:published"),
             updated=dt("a:updated"),
             journal_ref=arx_text("journal_ref"),

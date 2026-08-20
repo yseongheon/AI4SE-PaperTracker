@@ -12,7 +12,7 @@ from app.config import settings
 from app.crawler.arxiv_client import ArxivClient, ArxivEntry, default_lookback_window
 from app.crawler.dblp_client import DblpClient
 from app.crawler.matcher import MatchStats, match_papers
-from app.crawler.normalize import normalize_author, normalize_title
+from app.crawler.normalize import normalize_author, normalize_institution, normalize_title
 from app.models import Author, CrawlRun, Paper, PaperAuthor, Venue
 
 logger = logging.getLogger(__name__)
@@ -96,21 +96,24 @@ def upsert_papers(db: Session, entries: list[ArxivEntry]) -> tuple[int, int]:
         paper.comment = entry.comment
         if paper.year is None and entry.published:
             paper.year = entry.published.year  # 暂无正式发表年份时先用 arXiv 年份
-        _replace_authors(db, paper, entry.authors)
+        _replace_authors(db, paper, entry.authors, entry.affiliations)
     db.commit()
     return new_count, updated_count
 
 
-def _replace_authors(db: Session, paper: Paper, author_names: list[str]) -> None:
+def _replace_authors(
+    db: Session, paper: Paper, author_names: list[str], affiliations: list[str] | None = None
+) -> None:
     """重建作者关联（幂等）：归一化查重，重复作者复用同一 Author 记录。
 
     同一论文内重复出现的作者名（arXiv 元数据偶发）跳过：PaperAuthor 的
     (paper_id, author_id) 复合主键不允许同作者两行。
+    affiliations 与 author_names 平行（position 对齐）；作者被跳过时同步跳过对应机构。
     """
     paper.author_links.clear()
     seen: set[str] = set()
     position = 0
-    for name in author_names:
+    for idx, name in enumerate(author_names):
         norm = normalize_author(name)
         if norm in seen or not norm:
             continue
@@ -120,7 +123,14 @@ def _replace_authors(db: Session, paper: Paper, author_names: list[str]) -> None
             author = Author(name=name, name_normalized=norm)
             db.add(author)
             db.flush()  # 获取新作者 id
-        paper.author_links.append(PaperAuthor(author=author, position=position))
+        raw_aff = affiliations[idx] if affiliations and idx < len(affiliations) else ""
+        paper.author_links.append(
+            PaperAuthor(
+                author=author,
+                position=position,
+                affiliation=normalize_institution(raw_aff),
+            )
+        )
         position += 1
 
 

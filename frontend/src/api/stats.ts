@@ -1,6 +1,6 @@
 import http from './http'
 import type {
-  AuthorStat, CoauthorGraph, CrossMatrix, TrendResponse, WordItem,
+  AuthorStat, CoauthorGraph, CrossMatrix, InstitutionStat, TrendResponse, WordItem,
 } from '../types'
 
 // 趋势：group_by=topic|venue|year；后端按天返回原始计数，聚合粒度由前端决定（DR-020）
@@ -29,6 +29,13 @@ export async function getAuthorsTop(limit = 50): Promise<AuthorStat[]> {
     params: { limit },
   })
   return data.authors
+}
+
+export async function getInstitutionsTop(limit = 50): Promise<InstitutionStat[]> {
+  const { data } = await http.get<{ institutions: InstitutionStat[] }>('/stats/institutions', {
+    params: { limit },
+  })
+  return data.institutions
 }
 
 export async function getCross(): Promise<CrossMatrix> {

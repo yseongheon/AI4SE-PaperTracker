@@ -1,5 +1,10 @@
-"""标题/作者归一化测试：跨源匹配键的正确性。"""
-from app.crawler.normalize import author_last_name, normalize_author, normalize_title
+"""标题/作者/机构归一化测试：跨源匹配键的正确性。"""
+from app.crawler.normalize import (
+    author_last_name,
+    normalize_author,
+    normalize_institution,
+    normalize_title,
+)
 
 
 def test_basic_lowercase_and_ws():
@@ -49,3 +54,24 @@ def test_author_last_name_dblp_disambiguation_suffix():
     assert author_last_name("Seongmin Lee 0001") == "lee"
     assert author_last_name("Miao Miao 0001") == "miao"
     assert author_last_name("Bob Li 0002") == "li"
+
+
+# ---- 机构归一化（机构榜/作者机构） ----
+
+
+def test_normalize_institution_expands_abbrev():
+    assert normalize_institution("Tsinghua Univ.") == "tsinghua university"
+    assert normalize_institution("TU Wien Inst.") == "tu wien institute"
+    assert normalize_institution("Software & Systems Engineering") == "software and systems engineering"
+    assert normalize_institution("Dept. of CS") == "department of cs"
+
+
+def test_normalize_institution_strips_punct_and_ws():
+    assert normalize_institution("  Zhejiang Univ., China; ") == "zhejiang university, china"
+    assert normalize_institution("X Univ.\n\tY") == "x university y"
+
+
+def test_normalize_institution_empty_is_none():
+    assert normalize_institution("") is None
+    assert normalize_institution("   ") is None
+    assert normalize_institution(None) is None

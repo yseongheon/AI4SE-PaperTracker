@@ -3,18 +3,19 @@ import { computed, ref } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart } from 'echarts/charts'
+import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import type { AggregateMode, TrendResponse } from '../types'
 import { aggregateSeries } from '../utils/trends'
 
 // 按需注册 ECharts 模块（体积最小化）
-use([CanvasRenderer, LineChart, GridComponent, LegendComponent, TooltipComponent])
+use([CanvasRenderer, BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent])
 
 const props = defineProps<{
   groupBy: 'topic' | 'venue' | 'year'
   data: TrendResponse | null
   aggregate: AggregateMode
+  chartType?: 'line' | 'bar' // 柱状/折线，默认折线
   stacked?: boolean // M7 堆叠面积图
 }>()
 
@@ -28,6 +29,8 @@ const aggregated = computed(() => {
   return aggregateSeries(props.data.labels, props.data.series, mode)
 })
 
+const isBar = computed(() => props.chartType === 'bar')
+
 const option = computed(() => ({
   textStyle: { fontFamily: 'Poppins, Microsoft YaHei, sans-serif' },
   tooltip: { trigger: 'axis' as const },
@@ -37,16 +40,18 @@ const option = computed(() => ({
     selected: legendSelected.value ?? undefined,
   },
   grid: { left: 50, right: 24, top: 30, bottom: 48 },
-  xAxis: { type: 'category' as const, data: aggregated.value.labels, boundaryGap: false },
+  // 柱状图留出柱宽边距，折线图贴边（时间序列）
+  xAxis: { type: 'category' as const, data: aggregated.value.labels, boundaryGap: isBar.value },
   yAxis: { type: 'value' as const, minInterval: 1 },
   series: aggregated.value.series.map((s) => ({
     name: s.name,
-    type: 'line' as const,
+    type: isBar.value ? ('bar' as const) : ('line' as const),
     data: s.values,
-    smooth: true,
-    symbol: 'none',
+    barMaxWidth: isBar.value ? 20 : undefined,
+    smooth: isBar.value ? undefined : true,
+    symbol: isBar.value ? undefined : 'none',
     stack: props.stacked ? 'total' : undefined,
-    areaStyle: props.stacked ? { opacity: 0.65 } : undefined,
+    areaStyle: props.stacked && !isBar.value ? { opacity: 0.65 } : undefined,
     emphasis: { focus: 'series' as const },
   })),
 }))

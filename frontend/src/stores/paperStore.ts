@@ -30,6 +30,7 @@ export const usePaperStore = defineStore('paper', {
           is_ai4se: filter.isAi4se || undefined,
           marks: filter.marks || undefined,
           author: filter.author || undefined,
+          institution: filter.institution || undefined,
           min_citations: filter.minCitations ?? undefined,
           sort: filter.sort,
         })

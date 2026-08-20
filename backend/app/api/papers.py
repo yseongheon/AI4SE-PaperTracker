@@ -24,6 +24,7 @@ def list_papers(
         description="个性化标记过滤：bookmark 只看收藏 / read_later 只看稍后读 / unread 只看未读",
     ),
     author: str | None = Query(None, description="按作者姓名过滤（模糊匹配）"),
+    institution: str | None = Query(None, description="按作者机构过滤（精确匹配，规则归一化）"),
     field: str = Query("any", pattern="^(any|title|abstract)$", description="q 搜索范围：any=标题+摘要 / title / abstract"),
     year_from: int | None = Query(None, ge=1990, le=2100, description="年份区间起"),
     year_to: int | None = Query(None, ge=1990, le=2100, description="年份区间止"),
@@ -33,9 +34,23 @@ def list_papers(
     user: User | None = Depends(auth_service.get_optional_user),  # M9 标记按用户隔离
 ) -> PaperPage:
     items, total = paper_service.list_papers(
-        db, page, page_size, q, topic, venue, year, is_ai4se, marks, sort,
-        author, field, year_from, year_to, min_citations,
-        user.id if user else None,
+        db,
+        page=page,
+        page_size=page_size,
+        q=q,
+        topic=topic,
+        venue=venue,
+        year=year,
+        is_ai4se=is_ai4se,
+        marks=marks,
+        sort=sort,
+        author=author,
+        field=field,
+        year_from=year_from,
+        year_to=year_to,
+        min_citations=min_citations,
+        institution=institution,
+        user_id=user.id if user else None,
     )
     return PaperPage(items=items, total=total, page=page, page_size=page_size)
 

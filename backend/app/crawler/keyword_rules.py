@@ -69,6 +69,8 @@ def run_keyword_screen(db: Session, only_candidates: bool = False) -> dict:
     query = db.query(Paper)
     if only_candidates:
         query = query.filter(Paper.is_ai4se_candidate.is_(True))
+    # 已分类论文的 LLM 标签即最终结果，跳过以免重插 keyword 标签撞 (paper_id, topic_id) 唯一约束
+    query = query.filter(Paper.status != "classified")
     papers = query.all()
 
     topic_counts: Counter = Counter()

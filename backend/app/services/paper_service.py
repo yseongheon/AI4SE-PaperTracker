@@ -97,12 +97,14 @@ def build_papers_query(
     year_from: int | None = None,
     year_to: int | None = None,
     min_citations: int | None = None,
+    institution: str | None = None,
     user_id: int | None = None,
 ):
     """公共过滤构建器（M6+M7+M8+M9）：列表与导出共用同一套过滤条件。
 
     field 指定 q 的搜索范围：any（标题+摘要）/ title / abstract；
-    author 按作者姓名（归一化模糊匹配）过滤；year_from/year_to 年份区间；
+    author 按作者姓名（归一化模糊匹配）过滤；institution 按作者机构精确过滤
+    （存值已规则归一化小写）；year_from/year_to 年份区间；
     min_citations（M8）只看引用数 ≥ N 的论文；user_id（M9）标记过滤按用户隔离。
     """
     query = db.query(Paper)
@@ -124,6 +126,14 @@ def build_papers_query(
         query = query.join(PaperAuthor, PaperAuthor.paper_id == Paper.id).join(
             Author, Author.id == PaperAuthor.author_id
         ).filter(Author.name_normalized.ilike(f"%{author.strip().lower()}%"))
+    if institution:
+        # 机构过滤：EXISTS 子查询（多作者论文不产生重复行）
+        inst = institution.strip().lower()
+        query = query.filter(
+            db.query(PaperAuthor)
+            .filter(PaperAuthor.paper_id == Paper.id, PaperAuthor.affiliation == inst)
+            .exists()
+        )
     if year_from is not None:
         query = query.filter(Paper.year >= year_from)
     if year_to is not None:
@@ -172,12 +182,25 @@ def list_papers(
     year_from: int | None = None,
     year_to: int | None = None,
     min_citations: int | None = None,
+    institution: str | None = None,
     user_id: int | None = None,
 ) -> tuple[list[PaperListItem], int]:
     """论文列表：过滤 + 排序 + 分页，返回 (items, total)。"""
     query = build_papers_query(
-        db, q, topic, venue, year, is_ai4se, marks, author, field, year_from, year_to,
-        min_citations, user_id,
+        db,
+        q=q,
+        topic=topic,
+        venue=venue,
+        year=year,
+        is_ai4se=is_ai4se,
+        marks=marks,
+        author=author,
+        field=field,
+        year_from=year_from,
+        year_to=year_to,
+        min_citations=min_citations,
+        institution=institution,
+        user_id=user_id,
     )
 
     if sort == "citations":

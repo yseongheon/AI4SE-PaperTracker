@@ -59,6 +59,14 @@ def client(monkeypatch):
     db.add(PaperAuthor(paper_id=papers[0].id, author_id=1, position=0))
     db.add(PaperAuthor(paper_id=papers[0].id, author_id=alice.id, position=1))
     db.add(PaperAuthor(paper_id=papers[1].id, author_id=alice.id, position=0))
+    db.flush()  # autoflush=False：先 flush 才能查到刚加的 PaperAuthor 行
+    # M11 机构：给 papers[0] 的 Xiaoyu Wang 挂机构，供机构过滤测试
+    pa = (
+        db.query(PaperAuthor)
+        .filter(PaperAuthor.paper_id == papers[0].id, PaperAuthor.position == 0)
+        .first()
+    )
+    pa.affiliation = "pennsylvania state university"
     db.commit()
     db.close()
 
@@ -79,6 +87,19 @@ def test_filter_by_author(client):
     r2 = client.get("/api/papers", params={"author": "xiaoyu"})
     assert r2.json()["total"] == 1
     assert r2.json()["items"][0]["title"].startswith("LLM Bug Repair")
+
+
+def test_filter_by_institution(client):
+    r = client.get("/api/papers", params={"institution": "pennsylvania state university"})
+    assert r.status_code == 200
+    assert r.json()["total"] == 1
+    assert r.json()["items"][0]["title"] == "LLM Bug Repair with Agents"
+
+
+def test_filter_by_institution_no_match(client):
+    r = client.get("/api/papers", params={"institution": "university of copenhagen"})
+    assert r.status_code == 200
+    assert r.json()["total"] == 0
 
 
 def test_search_field_title_only(client):

@@ -66,6 +66,7 @@
 | DR-026 | 引用数数据源（替代 DR-023） | OpenAlex（原方案）/ Crossref / Semantic Scholar / 双源混合 | **双源混合：Crossref(DOI)+Semantic Scholar(arXiv)** | 实测 api.openalex.org 国内不可达（连接超时，Cloudflare IP 被阻断）；Crossref（DOI 查询快、限流宽松）与 Semantic Scholar（arXiv ID 查询、限流 100 次/5 分钟）均可达；DOI 优先 + arXiv 兜底覆盖率最高 | 2026-08-19 | 用户 |
 | DR-027 | M9 认证方案 | 自建 HMAC token / python-jose JWT / 服务端 session 表 | **自建 HMAC token（零新依赖）** | 标准库 hmac/hashlib/secrets 实现；密码 pbkdf2（sha256、10 万次迭代、随机盐）；token 无状态 30 天有效；课题组内网规模完全够用 | 2026-08-19 | 用户 |
 | DR-028 | M9 个人化范围 | 周报+画像页 / 只画像 / 只账号 | **周报 + 画像页** | 每周五为收藏数>0 的用户生成个人收藏周报（data/reports/personal/）；个人画像页（统计+收藏主题分布+最近收藏） | 2026-08-19 | 用户 |
+| DR-029 | M11 机构功能 | 数据源 arXiv/S2；存储 字符串列/独立机构表；归一化 规则/LLM；UI 页签/并排 | **arXiv affiliation + paper_authors.affiliation 字符串列 + 规则归一化 + 作者榜同页并排** | arXiv 免费即时（S2 走代理被限流、arXiv 机构覆盖仅 ~2%）；字符串列改动最小；规则归一化免费（用户拍板不用 LLM）；机构计数一律 COUNT(DISTINCT)（同机构多作者合著只算 1 篇）；垃圾机构（作者名误填）用白名单+多 token 规则过滤；引用数 S2 暂不补（api.semanticscholar.org 被墙） | 2026-08-20 | 用户 |
 
 ### 默认值 / 待确认项（M0 启动时逐项确认，未确认前按默认执行）
 

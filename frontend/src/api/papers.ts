@@ -48,6 +48,7 @@ export function exportUrl(
   if (params.is_ai4se) sp.set('is_ai4se', 'true')
   if (params.marks) sp.set('marks', params.marks)
   if (params.author) sp.set('author', params.author)
+  if (params.institution) sp.set('institution', params.institution)
   if (params.ids?.length) sp.set('ids', params.ids.join(','))
   return `/export?${sp.toString()}`
 }

@@ -26,6 +26,7 @@ def export_papers(
         None, pattern="^(bookmark|read_later|unread)$", description="个性化标记过滤"
     ),
     author: str | None = Query(None, description="按作者姓名过滤"),
+    institution: str | None = Query(None, description="按作者机构过滤"),
     field: str = Query("any", pattern="^(any|title|abstract)$", description="q 搜索范围"),
     year_from: int | None = Query(None, ge=1990, le=2100, description="年份区间起"),
     year_to: int | None = Query(None, ge=1990, le=2100, description="年份区间止"),
@@ -34,8 +35,19 @@ def export_papers(
     db: Session = Depends(get_db),
 ) -> Response:
     query = paper_service.build_papers_query(
-        db, q, topic, venue, year, is_ai4se, marks, author, field, year_from, year_to,
-        min_citations,
+        db,
+        q=q,
+        topic=topic,
+        venue=venue,
+        year=year,
+        is_ai4se=is_ai4se,
+        marks=marks,
+        author=author,
+        field=field,
+        year_from=year_from,
+        year_to=year_to,
+        min_citations=min_citations,
+        institution=institution,
     )
     if ids:
         id_list = [int(x) for x in ids.split(",") if x.strip().isdigit()]

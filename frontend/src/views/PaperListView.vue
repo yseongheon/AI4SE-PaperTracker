@@ -35,6 +35,7 @@ const advSummary = computed(() => {
     parts.push({ any: '标题+摘要', title: '仅标题', abstract: '仅摘要' }[filter.field])
   }
   if (filter.author) parts.push(`作者=${filter.author}`)
+  if (filter.institution) parts.push(`机构=${filter.institution}`)
   if (filter.yearFrom != null || filter.yearTo != null) {
     parts.push(`年份 ${filter.yearFrom ?? '…'}-${filter.yearTo ?? '…'}`)
   }
@@ -50,13 +51,17 @@ function applyAdvFilter() {
 
 // 清除高级筛选（保留搜索词与侧栏条件）
 function clearAdv() {
-  filter.$patch({ field: 'any', author: '', yearFrom: null, yearTo: null, minCitations: null, page: 1 })
+  filter.$patch({ field: 'any', author: '', institution: '', yearFrom: null, yearTo: null, minCitations: null, page: 1 })
 }
 
 onMounted(async () => {
   // M7：从作者榜/详情页跳转过来（?author=xxx）→ 初始化作者过滤
   if (route.query.author) {
     filter.author = String(route.query.author)
+  }
+  // M11：从机构榜跳转过来（?institution=xxx）→ 初始化机构过滤
+  if (route.query.institution) {
+    filter.institution = String(route.query.institution)
   }
   try {
     // 年份选项来自趋势接口的年份分组（数据驱动，不硬编码）
@@ -118,6 +123,7 @@ function downloadExport(format: 'csv' | 'json' | 'bibtex') {
       is_ai4se: filter.isAi4se || undefined,
       marks: filter.marks || undefined,
       author: filter.author || undefined,
+      institution: filter.institution || undefined,
     }),
   )
 }

@@ -77,6 +77,7 @@ export interface PaperListParams {
   is_ai4se?: boolean
   marks?: Exclude<MarksFilter, ''>
   author?: string // M7 作者过滤
+  institution?: string // M11 机构过滤（机构榜点击跳转）
   min_citations?: number // M8 最低引用数
   sort?: 'newest' | 'venue' | 'citations'
 }
@@ -137,6 +138,15 @@ export interface WordItem {
 
 export interface AuthorStat {
   id: number
+  name: string
+  paper_count: number
+  ai4se_count: number
+  top_topics: { slug: string; name_zh: string; count: number }[]
+  affiliation?: string | null // M11 作者出身机构（arXiv 机构，规则归一化；无则 null）
+}
+
+// M11 机构榜：机构名即 key（无 id），计数为 DISTINCT 论文数
+export interface InstitutionStat {
   name: string
   paper_count: number
   ai4se_count: number

@@ -9,7 +9,7 @@ from collections import Counter, defaultdict
 from datetime import date, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import Integer, cast, func
+from sqlalchemy import Integer, case, cast, func
 from sqlalchemy.orm import Session
 
 from app.models import Author, Paper, PaperAuthor, PaperTopic, Topic, Venue
@@ -198,8 +198,29 @@ def words(db: Session, limit: int = 50, scope: str = "ai4se") -> dict:
     }
 
 
+# 单 token 机构白名单：arXiv 机构自由文本常只填缩写/公司名；白名单外的单 token 视为作者名误填
+_SINGLE_TOKEN_INSTITUTIONS = {
+    "ubc", "sri", "epfl", "rptu", "oracle", "pwc", "sonarsource", "accentrust",
+    "novafabric", "irit-traces", "lre", "lsl", "epita", "microsoft", "google",
+    "meta", "ibm", "amazon", "huawei", "eth", "mit", "deepmind", "openai", "ntua",
+}
+
+
+def _is_plausible_institution(aff: str | None) -> bool:
+    """机构可信度过滤：排除明显非机构项（空、过短、'independent researcher'、单 token 作者名误填）。"""
+    a = (aff or "").strip().lower()
+    if len(a) < 3:
+        return False
+    if "independent researcher" in a:
+        return False
+    tokens = [t for t in a.split() if t]
+    if len(tokens) == 1 and a not in _SINGLE_TOKEN_INSTITUTIONS:
+        return False
+    return True
+
+
 def authors_top(db: Session, limit: int = 50) -> dict:
-    """作者 TOP 榜：论文数 + AI4SE 论文数 + 主要主题（按论文数降序）。"""
+    """作者 TOP 榜：论文数 + AI4SE 论文数 + 主要主题 + 机构（按论文数降序）。"""
     rows = (
         db.query(
             Author.id,
@@ -228,6 +249,24 @@ def authors_top(db: Session, limit: int = 50) -> dict:
     by_author: dict[int, list[dict]] = defaultdict(list)
     for aid, slug, name_zh, cnt in topic_rows:
         by_author[aid].append({"slug": slug, "name_zh": name_zh, "count": cnt})
+    # 机构：每作者取出现次数最多的非空 affiliation
+    aff_rows = (
+        db.query(PaperAuthor.author_id, PaperAuthor.affiliation, func.count(PaperAuthor.paper_id))
+        .filter(PaperAuthor.author_id.in_(author_ids), PaperAuthor.affiliation.isnot(None))
+        .group_by(PaperAuthor.author_id, PaperAuthor.affiliation)
+        .all()
+    )
+    per_author_aff: dict[int, Counter[str]] = defaultdict(Counter)
+    for aid, aff, cnt in aff_rows:
+        per_author_aff[aid][aff] = cnt
+
+    def top_plausible_aff(counter: Counter[str]) -> str | None:
+        """取出现最多的可信机构（arXiv 机构自由文本含作者名误填，先过滤）。"""
+        plausible = {k: v for k, v in counter.items() if _is_plausible_institution(k)}
+        if not plausible:
+            return None
+        return max(plausible, key=plausible.get)
+
     return {
         "authors": [
             {
@@ -236,8 +275,67 @@ def authors_top(db: Session, limit: int = 50) -> dict:
                 "paper_count": cnt,
                 "ai4se_count": int(ai4se or 0),
                 "top_topics": by_author.get(aid, [])[:3],
+                "affiliation": top_plausible_aff(per_author_aff[aid]),
             }
             for aid, name, cnt, ai4se in rows
+        ]
+    }
+
+
+def institutions_top(db: Session, limit: int = 50) -> dict:
+    """机构 TOP 榜：论文数（去重）+ AI4SE 论文数 + 主要主题（按论文数降序）。
+
+    计数一律 COUNT(DISTINCT)：同一论文有多个同机构作者时只能算 1 篇。
+    """
+    paper_count = func.count(func.distinct(Paper.id))
+    ai4se_count = func.count(
+        func.distinct(case((Paper.is_ai4se_confirmed.is_(True), Paper.id), else_=None))
+    )
+    rows = (
+        db.query(
+            PaperAuthor.affiliation.label("name"),
+            paper_count.label("paper_count"),
+            ai4se_count.label("ai4se_count"),
+        )
+        .join(Paper, Paper.id == PaperAuthor.paper_id)
+        .filter(PaperAuthor.affiliation.isnot(None))
+        .group_by(PaperAuthor.affiliation)
+        .order_by(paper_count.desc(), PaperAuthor.affiliation)
+        .all()
+    )
+    # 过滤明显非机构项（作者名误填等）后再取 TOP N
+    filtered = [r for r in rows if _is_plausible_institution(r.name)][:limit]
+    names = [r.name for r in filtered]
+    # 主要主题：按机构分组，count(distinct paper_id)（镜像 authors_top 第二查询）
+    topic_rows = (
+        db.query(
+            PaperAuthor.affiliation,
+            Topic.slug,
+            Topic.name_zh,
+            func.count(func.distinct(PaperTopic.paper_id)),
+        )
+        .join(PaperTopic, PaperTopic.paper_id == PaperAuthor.paper_id)
+        .join(Topic, Topic.id == PaperTopic.topic_id)
+        .filter(PaperAuthor.affiliation.in_(names))
+        .group_by(PaperAuthor.affiliation, Topic.slug, Topic.name_zh)
+        .order_by(
+            PaperAuthor.affiliation,
+            func.count(func.distinct(PaperTopic.paper_id)).desc(),
+        )
+        .all()
+    )
+    by_inst: dict[str, list[dict]] = defaultdict(list)
+    for aff, slug, name_zh, cnt in topic_rows:
+        by_inst[aff].append({"slug": slug, "name_zh": name_zh, "count": cnt})
+    return {
+        "institutions": [
+            {
+                "name": r.name,
+                "paper_count": r.paper_count,
+                "ai4se_count": int(r.ai4se_count or 0),
+                "top_topics": by_inst.get(r.name, [])[:3],
+            }
+            for r in filtered
         ]
     }
 

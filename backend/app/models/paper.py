@@ -108,6 +108,7 @@ class PaperAuthor(Base):
     paper_id: Mapped[int] = mapped_column(ForeignKey("papers.id"), primary_key=True)
     author_id: Mapped[int] = mapped_column(ForeignKey("authors.id"), primary_key=True)
     position: Mapped[int] = mapped_column(Integer, default=0)
+    affiliation: Mapped[str | None] = mapped_column(String(255), nullable=True)  # 机构（arXiv 每作者机构，规则归一化）
 
     paper: Mapped[Paper] = relationship(back_populates="author_links")
     author: Mapped["Author"] = relationship(back_populates="paper_links")  # noqa: F821

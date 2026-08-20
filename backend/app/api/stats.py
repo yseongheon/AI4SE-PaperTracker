@@ -36,6 +36,14 @@ def authors_top(
     return stats_service.authors_top(db, limit)
 
 
+@router.get("/institutions")
+def institutions_top(
+    limit: int = Query(50, ge=10, le=100, description="榜单机构数上限"),
+    db: Session = Depends(get_db),
+) -> dict:
+    return stats_service.institutions_top(db, limit)
+
+
 @router.get("/cross")
 def cross(db: Session = Depends(get_db)) -> dict:
     """会议×主题交叉矩阵（热力图）。"""
