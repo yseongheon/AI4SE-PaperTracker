@@ -65,6 +65,13 @@ onMounted(async () => {
   if (route.query.institution) {
     filter.institution = String(route.query.institution)
   }
+  // 个人画像已读/收藏跳转（?marks=read）→ 初始化阅读状态过滤
+  if (route.query.marks) {
+    const m = String(route.query.marks)
+    if (m === 'bookmark' || m === 'read' || m === 'read_later' || m === 'unread') {
+      filter.marks = m as typeof filter.marks
+    }
+  }
   try {
     // 年份选项来自趋势接口的年份分组（数据驱动，不硬编码）
     const [t, v, y, inst] = await Promise.all([

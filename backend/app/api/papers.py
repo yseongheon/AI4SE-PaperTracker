@@ -20,8 +20,8 @@ def list_papers(
     year: int | None = Query(None, ge=1990, le=2100, description="年份"),
     is_ai4se: bool | None = Query(None, description="是否已确认 AI4SE"),
     marks: str | None = Query(
-        None, pattern="^(bookmark|read_later|unread)$",
-        description="个性化标记过滤：bookmark 只看收藏 / read_later 只看稍后读 / unread 只看未读",
+        None, pattern="^(bookmark|read|read_later|unread)$",
+        description="个性化标记过滤：bookmark 只看收藏 / read 只看已读 / read_later 只看稍后读 / unread 只看未读",
     ),
     author: str | None = Query(None, description="按作者姓名过滤（模糊匹配）"),
     institution: str | None = Query(None, description="按作者机构过滤（精确匹配，规则归一化）"),

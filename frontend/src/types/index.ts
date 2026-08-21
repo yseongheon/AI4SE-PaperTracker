@@ -28,7 +28,7 @@ export interface Highlights {
 }
 
 export type MarkType = 'bookmark' | 'read' | 'read_later'
-export type MarksFilter = '' | 'bookmark' | 'read_later' | 'unread'
+export type MarksFilter = '' | 'bookmark' | 'read' | 'read_later' | 'unread'
 
 export interface PaperListItem {
   id: number
@@ -135,6 +135,7 @@ export interface ProfileStats {
   counts: { bookmark: number; read: number; read_later: number }
   topic_dist: { slug: string; name_zh: string; count: number }[]
   recent: PaperListItem[]
+  recent_read: PaperListItem[] // 最近已读（画像页「最近已读」列表）
 }
 
 // ---- M7 分析图表 ----

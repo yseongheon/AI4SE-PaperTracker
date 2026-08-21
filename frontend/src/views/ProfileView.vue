@@ -6,10 +6,12 @@ import { ElMessage } from 'element-plus'
 import { getProfile, updatePassword, updateProfile } from '../api/users'
 import TopicTag from '../components/TopicTag.vue'
 import { useAuthStore } from '../stores/authStore'
+import { useFilterStore } from '../stores/filterStore'
 import type { ProfileStats } from '../types'
 
 const router = useRouter()
 const auth = useAuthStore()
+const filter = useFilterStore()
 const profile = ref<ProfileStats | null>(null)
 const loading = ref(true)
 
@@ -26,6 +28,13 @@ onMounted(async () => {
 
 function goPaper(id: number) {
   router.push(`/papers/${id}`)
+}
+
+// 已读卡片 / 「查看全部」点击 → 论文列表页（重置筛选，只看已读）
+function goReadList() {
+  filter.reset()
+  filter.marks = 'read'
+  router.push('/')
 }
 
 // ---- M9 反馈：账号设置 ----
@@ -105,9 +114,9 @@ async function savePassword() {
           <div class="stat-num mono">{{ profile.counts.bookmark }}</div>
           <div class="stat-label">⭐ 收藏</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card clickable" title="查看全部已读论文" @click="goReadList">
           <div class="stat-num mono">{{ profile.counts.read }}</div>
-          <div class="stat-label">✓ 已读</div>
+          <div class="stat-label">✓ 已读 ›</div>
         </div>
         <div class="stat-card">
           <div class="stat-num mono">{{ profile.counts.read_later }}</div>
@@ -150,6 +159,26 @@ async function savePassword() {
           </li>
         </ul>
         <p v-else class="empty">暂无收藏</p>
+      </el-card>
+
+      <!-- 最近已读 -->
+      <el-card class="card" shadow="never">
+        <template #header>
+          <div class="card-head">
+            <span class="card-title">最近已读</span>
+            <el-link type="primary" @click="goReadList">查看全部 ›</el-link>
+          </div>
+        </template>
+        <ul v-if="profile.recent_read.length" class="recent">
+          <li v-for="p in profile.recent_read" :key="p.id">
+            <el-link type="primary" @click="goPaper(p.id)">{{ p.title }}</el-link>
+            <span v-if="p.venue" class="muted">· {{ p.venue.short_name }} {{ p.year ?? '' }}</span>
+            <span class="topics-inline">
+              <TopicTag v-for="t in p.topics" :key="t.slug" :topic="t" />
+            </span>
+          </li>
+        </ul>
+        <p v-else class="empty">还没有已读论文——打开论文详情页点「标记已读」即可</p>
       </el-card>
 
       <!-- M9 反馈：账号设置对话框 -->
@@ -217,6 +246,14 @@ async function savePassword() {
   padding: 20px;
   text-align: center;
 }
+.stat-card.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.stat-card.clickable:hover {
+  border-color: var(--brand-primary);
+  transform: translateY(-1px);
+}
 .stat-num {
   font-size: 28px;
   font-weight: 700;
@@ -232,6 +269,11 @@ async function savePassword() {
 }
 .card-title {
   font-weight: 600;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .topic-bars {
   display: flex;

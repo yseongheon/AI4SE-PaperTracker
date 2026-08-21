@@ -17,7 +17,7 @@ export const useFilterStore = defineStore('filter', {
     yearFrom: null as number | null, // M7 年份区间起
     yearTo: null as number | null, // M7 年份区间止
     isAi4se: false, // 仅看已确认 AI4SE
-    marks: '' as MarksFilter, // M6 阅读状态：'' 全部 / bookmark 收藏 / read_later 稍后读 / unread 未读
+    marks: '' as MarksFilter, // M6 阅读状态：'' 全部 / bookmark 收藏 / read 已读 / read_later 稍后读 / unread 未读
     author: '', // M7 作者过滤（作者榜/详情页点击跳转）
     institution: '', // M11 机构过滤（机构榜点击跳转）
     minCitations: null as number | null, // M8 最低引用数

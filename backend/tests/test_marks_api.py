@@ -118,6 +118,18 @@ def test_filter_unread(client):
     assert {i["id"] for i in body["items"]} == {2, 3}
 
 
+def test_filter_read(client):
+    """只看已读过滤（画像页「已读」卡片跳转列表页使用）。"""
+    client.post("/api/papers/1/marks", json={"type": "read", "value": True})
+    client.post("/api/papers/2/marks", json={"type": "bookmark", "value": True})
+
+    r = client.get("/api/papers", params={"marks": "read"})
+    body = r.json()
+    assert body["total"] == 1
+    assert [i["id"] for i in body["items"]] == [1]
+    assert body["items"][0]["marks"]["read"] is True
+
+
 def test_filter_invalid_marks(client):
     r = client.get("/api/papers", params={"marks": "star"})
     assert r.status_code == 422
@@ -160,3 +172,24 @@ def test_anonymous_sees_no_marks(client):
     client.headers.pop("Authorization", None)  # 模拟未登录
     r = client.get("/api/papers/1")
     assert r.json()["marks"] == {"bookmark": False, "read": False, "read_later": False}
+
+
+# ---- 画像页「最近已读」----
+
+
+def test_profile_recent_read(client):
+    """画像接口返回 recent_read：只含已读论文（收藏不混入），列表项带 marks 集合。"""
+    client.post("/api/papers/1/marks", json={"type": "read", "value": True})
+    client.post("/api/papers/2/marks", json={"type": "read", "value": True})
+    client.post("/api/papers/2/marks", json={"type": "bookmark", "value": True})
+    client.post("/api/papers/3/marks", json={"type": "bookmark", "value": True})
+
+    r = client.get("/api/users/me/profile")
+    body = r.json()
+    assert body["counts"]["read"] == 2
+    assert {p["id"] for p in body["recent_read"]} == {1, 2}
+    assert all(p["marks"]["read"] for p in body["recent_read"])
+    # 收藏列表只含 bookmark，不含只已读的论文 1（同时刻标记顺序不定，用集合断言）
+    assert {p["id"] for p in body["recent"]} == {2, 3}
+    # 空库字段类型稳定
+    assert isinstance(body["recent_read"], list)

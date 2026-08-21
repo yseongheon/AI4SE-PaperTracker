@@ -237,7 +237,7 @@ AI4SE-PaperTracker/
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /api/papers | 列表：`page, page_size, q, field(any\|title\|abstract), topic, venue, year, year_from, year_to, author, is_ai4se, marks(bookmark\|read_later\|unread), min_citations, sort(newest\|venue\|citations)` |
+| GET | /api/papers | 列表：`page, page_size, q, field(any\|title\|abstract), topic, venue, year, year_from, year_to, author, is_ai4se, marks(bookmark\|read\|read_later\|unread), min_citations, sort(newest\|venue\|citations)` |
 | GET | /api/papers/{id} | 详情：含作者（M12：`[{name, affiliation}]` 对象，可点机构）、venue、topics、summary_zh、highlights、双链接、pdf_url、marks、related 相关推荐 |
 | POST | /api/papers/{id}/marks | 设置/取消个性化标记：body `{type: bookmark\|read\|read_later, value: bool}`（幂等，返回最新标记集合） |
 | GET | /api/papers/{id}/bibtex | 单篇 BibTeX（M7 引用复制/下载） |
@@ -254,7 +254,7 @@ AI4SE-PaperTracker/
 | GET | /api/export | 导出：`format=csv\|json\|bibtex` + 列表全部过滤参数 + `ids=1,2,3`（M7 导出选中）；CSV 带 UTF-8 BOM，BibTeX 按 venue.type 选条目类型 |
 | POST | /api/auth/register | M9 注册：`{username, email?, password}`（pbkdf2 哈希）→ `{token, user}` |
 | POST | /api/auth/login | M9 登录：`{username\|email, password}` → `{token, user}`（HMAC token 30 天） |
-| GET | /api/users/me/profile | M9 个人画像（需登录）：标记统计/收藏主题分布/最近收藏 |
+| GET | /api/users/me/profile | M9 个人画像（需登录）：标记统计/收藏主题分布/最近收藏/最近已读（`recent_read`） |
 
 M9 认证约定：浏览接口（列表/详情/导出）可匿名，Authorization 可选；标记接口 `POST /papers/{id}/marks` 需 `Authorization: Bearer <token>`（401 未登录）。
 

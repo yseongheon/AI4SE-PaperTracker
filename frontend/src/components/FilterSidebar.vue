@@ -50,6 +50,7 @@ const { topic, venue, year, isAi4se, marks, sort } = storeToRefs(filter)
       <el-radio-group v-model="marks" class="vert">
         <el-radio value="">全部</el-radio>
         <el-radio value="bookmark">只看收藏 ⭐</el-radio>
+        <el-radio value="read">只看已读 ✓</el-radio>
         <el-radio value="read_later">只看稍后读</el-radio>
         <el-radio value="unread">只看未读</el-radio>
       </el-radio-group>
