@@ -62,7 +62,7 @@ run(f"systemctl is-active papertracker")
 run(f"ps aux | grep uvicorn | grep -v grep | head -2", check=False)
 
 print("========== 7. 本机回环验证 ==========")
-run(f"curl -s -o /dev/null -w 'health: %{http_code}\\n' http://127.0.0.1:8000/api/health", check=False)
+run(f"curl -s -o /dev/null -w 'health: %{{http_code}}\\n' http://127.0.0.1:8000/api/health", check=False)
 run(f"curl -s 'http://127.0.0.1:8000/api/stats/institutions?page=1&page_size=3' | head -c 300; echo", check=False)
 
 cli.close()
