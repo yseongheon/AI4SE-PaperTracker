@@ -22,6 +22,12 @@ const router = createRouter({
       meta: { title: '主题趋势' },
     },
     {
+      path: '/leaderboard',
+      name: 'leaderboard',
+      component: () => import('../views/LeaderboardView.vue'),
+      meta: { title: '作者机构榜' },
+    },
+    {
       path: '/institutions/:name',
       name: 'institution-detail',
       component: () => import('../views/InstitutionDetailView.vue'),

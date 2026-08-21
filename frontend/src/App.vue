@@ -34,6 +34,7 @@ function logout() {
       <el-menu router :default-active="route.path" class="menu">
         <el-menu-item index="/">论文列表</el-menu-item>
         <el-menu-item index="/trend">主题趋势</el-menu-item>
+        <el-menu-item index="/leaderboard">作者机构榜</el-menu-item>
         <el-menu-item v-if="auth.isLoggedIn" index="/profile">个人画像</el-menu-item>
       </el-menu>
       <div class="aside-user">
