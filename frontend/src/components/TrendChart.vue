@@ -63,6 +63,14 @@ watch(chartWidth, async () => {
   checkOverflow()
 })
 
+// ECharts 图例显隐的唯一事实来源：legendSelected 为 null（未点过/已恢复全部）时
+// 显式展开成全 true 映射——ECharts mergeOption 用的是 zrUtil.merge(target, src, true)，
+// 只遍历新键、缺省键沿用旧值，所以「恢复全部」必须传全 true 才能真的重置
+const legendSelectedMap = computed(() => {
+  const names = aggregated.value.series.map((s) => s.name)
+  return legendSelected.value ?? Object.fromEntries(names.map((n) => [n, true]))
+})
+
 const option = computed(() => ({
   textStyle: { fontFamily: 'Poppins, Microsoft YaHei, sans-serif' },
   tooltip: { trigger: 'axis' as const },
@@ -72,12 +80,11 @@ const option = computed(() => ({
     show: !isBar.value,
     type: 'scroll' as const,
     bottom: 0,
-    // 仅在用户点过图例时才传 selected；null（默认全显）时省略该键——
-    // 传 selected: undefined 会在 ECharts mergeOption 时把 option.selected 覆盖为
-    // undefined（init 有 || {} 兜底、merge 没有），导致 legendFilter 里
-    // isSelected 读 undefined.hasOwnProperty 崩溃（点按周/按月即触发）。
+    // 始终显式传完整的 selected 映射，既不省略也不传 undefined：
+    // ① 省略 → mergeOption 沿用旧值，点选后再恢复会失效（柱状图变不回去）；
+    // ② 传 undefined → legendFilter 读 undefined.hasOwnProperty 崩溃。
     // selected 对系列显隐的控制不依赖 legend 是否显示，柱状图同样生效。
-    ...(legendSelected.value ? { selected: legendSelected.value } : {}),
+    selected: legendSelectedMap.value,
   },
   // 柱状图图例在画布外 → 底部省出图例空间
   grid: { left: 50, right: 24, top: 30, bottom: isBar.value ? 30 : 48 },
@@ -111,8 +118,11 @@ function onLegendSelectChanged(params: unknown) {
     legendSelected.value = Object.fromEntries(
       seriesNames.map((n) => [n, n === name]),
     )
+  } else {
+    // 多系列叠加对比：同步为 ECharts 实际显隐映射，避免把旧映射重新传回覆盖
+    const next = Object.fromEntries(seriesNames.map((n) => [n, selected[n] !== false]))
+    legendSelected.value = seriesNames.every((n) => next[n]) ? null : next
   }
-  // 其余情况（多系列叠加对比）：保持 ECharts 默认 toggle 行为
 }
 
 // 柱状图分类图例（画布外固定标签）：当前显示的分类集合

@@ -59,7 +59,7 @@ onMounted(async () => {
           :topics="cross.topics"
           :matrix="cross.matrix"
         />
-        <p class="hint">每个会议一根柱、按主题堆叠：快速定位「哪个会议更关注哪个主题」；点击图例主题名可单独对比</p>
+        <p class="hint">每个会议一组柱、各主题并排对比：快速定位「哪个会议更关注哪个主题」；点击上方主题标签可单独对比</p>
       </el-tab-pane>
     </el-tabs>
   </div>
