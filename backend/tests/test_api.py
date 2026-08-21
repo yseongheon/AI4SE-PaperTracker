@@ -44,7 +44,7 @@ def client(monkeypatch):
     seq = [0]
 
     def _paper(title, abstract, published, *, venue=None, confirmed=False,
-               candidate=False, topics=(), year=2026, authors=()):
+               candidate=False, topics=(), year=2026, authors=(), affiliations=()):
         seq[0] += 1
         n = seq[0]
         p = Paper(
@@ -64,15 +64,19 @@ def client(monkeypatch):
             a = Author(name=name, name_normalized=name.lower())
             db.add(a)
             db.flush()
-            db.add(PaperAuthor(paper_id=p.id, author_id=a.id, position=i))
+            db.add(PaperAuthor(
+                paper_id=p.id, author_id=a.id, position=i,
+                affiliation=affiliations[i] if affiliations and i < len(affiliations) else None,
+            ))
         return p
 
     _paper("Bug Fixing with LLM", "we repair defects using llm", datetime(2026, 3, 1),
            venue=icse, confirmed=True, candidate=True, topics=("code_repair",),
-           authors=("Alice", "Bob"))
+           authors=("Alice", "Bob"),
+           affiliations=("university of copenhagen", "university of copenhagen"))
     _paper("Test Generation Survey", "survey of llm test generation", datetime(2026, 4, 15),
            venue=fse, confirmed=True, candidate=True, topics=("testing", "llm4se_general"),
-           authors=("Carol",))
+           authors=("Carol",), affiliations=("kth royal institute of technology",))
     _paper("Unrelated Compiler Paper", "we optimize compilers", datetime(2026, 5, 1),
            topics=(), authors=("Dave",))
     _paper("LLM Candidate Only", "keyword hit but not confirmed", datetime(2026, 2, 1),
@@ -157,8 +161,8 @@ def test_get_paper_detail(client):
     assert body["title"] == "Bug Fixing with LLM"
     # M12：详情作者为带机构的对象（列表仍是 string[]）
     assert body["authors"] == [
-        {"name": "Alice", "affiliation": None},
-        {"name": "Bob", "affiliation": None},
+        {"name": "Alice", "affiliation": "university of copenhagen"},
+        {"name": "Bob", "affiliation": "university of copenhagen"},
     ]
     assert body["summary_zh"] is None
     assert body["venue"]["short_name"] == "ICSE"
@@ -235,3 +239,57 @@ def test_trends_invalid_params(client):
     assert client.get("/api/stats/trends", params={"start": "not-a-date"}).status_code == 400
     assert client.get("/api/stats/trends",
                       params={"start": "2026-05-01", "end": "2026-04-01"}).status_code == 400
+
+
+# ---- 作者/机构榜分页（M13） ----
+
+
+def test_stats_authors_pagination(client):
+    r = client.get("/api/stats/authors", params={"page": 1, "page_size": 2})
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"items", "total", "page", "page_size"}
+    assert body["total"] == 5  # Alice/Bob/Carol/Dave/Eve 各 1 篇
+    assert body["page"] == 1 and body["page_size"] == 2
+    assert len(body["items"]) == 2
+    # 论文数相同按 Author.id 升序 → 前两位 Alice, Bob
+    assert [i["name"] for i in body["items"]] == ["Alice", "Bob"]
+
+
+def test_stats_authors_invalid_params(client):
+    assert client.get("/api/stats/authors", params={"page_size": 1000}).status_code == 422
+    assert client.get("/api/stats/authors", params={"page": 0}).status_code == 422
+
+
+def test_stats_authors_search(client):
+    r = client.get("/api/stats/authors", params={"q": "ali"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    assert body["items"][0]["name"] == "Alice"
+    # 无匹配 → 空列表，total=0
+    assert client.get("/api/stats/authors", params={"q": "zzz"}).json()["total"] == 0
+    # 搜索 + 分页组合
+    r2 = client.get("/api/stats/authors", params={"q": "ali", "page_size": 100})
+    assert r2.json()["total"] == 1 and len(r2.json()["items"]) == 1
+
+
+def test_stats_institutions_pagination(client):
+    r = client.get("/api/stats/institutions", params={"page": 1, "page_size": 1})
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"items", "total", "page", "page_size"}
+    assert body["total"] == 2  # copenhagen + kth（去重后）
+    assert len(body["items"]) == 1
+    # 论文数相同按机构名升序 → 第一页是 kth
+    assert body["items"][0]["name"] == "kth royal institute of technology"
+
+
+def test_stats_institutions_search(client):
+    r = client.get("/api/stats/institutions", params={"q": "copenhagen"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    assert body["items"][0]["name"] == "university of copenhagen"
+    # 无匹配 → 空列表，total=0
+    assert client.get("/api/stats/institutions", params={"q": "zzz"}).json()["total"] == 0

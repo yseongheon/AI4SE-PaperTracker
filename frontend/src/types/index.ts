@@ -161,6 +161,21 @@ export interface InstitutionStat {
   top_topics: { slug: string; name_zh: string; count: number }[]
 }
 
+// M13 作者/机构榜分页响应（遵循后端 {items, total, page, page_size} 约定）
+export interface AuthorPage {
+  items: AuthorStat[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface InstitutionPage {
+  items: InstitutionStat[]
+  total: number
+  page: number
+  page_size: number
+}
+
 // M12 机构详情：统计 + 主题分布 + 合作机构
 export interface InstitutionTopicStat {
   slug: string

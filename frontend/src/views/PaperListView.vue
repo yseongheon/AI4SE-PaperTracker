@@ -5,9 +5,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { ArrowDown } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { listTopics } from '../api/topics'
 import { listVenues } from '../api/venues'
-import { getTrends, getInstitutionsTop } from '../api/stats'
+import { getTrends, getAllInstitutions } from '../api/stats'
 import { exportUrl, setMark } from '../api/papers'
 import { useFilterStore } from '../stores/filterStore'
 import { usePaperStore } from '../stores/paperStore'
@@ -70,7 +71,7 @@ onMounted(async () => {
       listTopics(),
       listVenues(),
       getTrends('year'),
-      getInstitutionsTop(100),
+      getAllInstitutions(),
     ])
     topics.value = t
     venues.value = v
@@ -116,9 +117,21 @@ function rowClass({ row }: { row: PaperListItem }) {
   return row.marks.read ? 'row-read' : ''
 }
 
+// 触发下载：用隐藏 <a> 点击而不是 window.open——
+// 下拉菜单 @command 回调里 window.open 会被弹窗拦截（异步回调不算用户手势），导致"按了没反应"
+function triggerDownload(url: string) {
+  const a = document.createElement('a')
+  a.href = url
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 // M6 导出当前筛选结果（浏览器直接下载）
 function downloadExport(format: 'csv' | 'json' | 'bibtex') {
-  window.open(
+  ElMessage.success(`正在导出 ${format.toUpperCase()}，请查看浏览器下载栏`)
+  triggerDownload(
     exportUrl(format, {
       q: filter.q || undefined,
       field: filter.field,
@@ -138,7 +151,8 @@ function downloadExport(format: 'csv' | 'json' | 'bibtex') {
 // M7 导出选中（勾选行）
 function exportSelected(format: 'csv' | 'json' | 'bibtex') {
   if (!selectedIds.value.length) return
-  window.open(exportUrl(format, { ids: selectedIds.value }))
+  ElMessage.success(`正在导出 ${selectedIds.value.length} 篇为 ${format.toUpperCase()}`)
+  triggerDownload(exportUrl(format, { ids: selectedIds.value }))
 }
 
 function onSelectionChange(rows: PaperListItem[]) {
@@ -183,38 +197,39 @@ function queryInstitutions(
         <el-button @click="advVisible = true">
           高级筛选<el-icon class="el-icon--right"><ArrowDown /></el-icon>
         </el-button>
-        <el-dropdown trigger="click" @command="downloadExport">
-          <el-tooltip content="导出符合当前筛选条件的全部论文（不勾选也有效）" placement="top">
+        <!-- tooltip 必须放在 dropdown 外层：嵌套在触发器内会让下拉菜单点不开（Element Plus 已知问题） -->
+        <el-tooltip content="导出符合当前筛选条件的全部论文（不勾选也有效）" placement="top">
+          <el-dropdown trigger="click" @command="downloadExport">
             <el-button>
               导出筛选结果<el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
-          </el-tooltip>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="csv">CSV（Excel）</el-dropdown-item>
-              <el-dropdown-item command="json">JSON</el-dropdown-item>
-              <el-dropdown-item command="bibtex">BibTeX（引用）</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-dropdown
-          trigger="click"
-          :disabled="!selectedIds.length"
-          @command="exportSelected"
-        >
-          <el-tooltip content="导出当前勾选的论文（先勾选左侧 ☑ 框）" placement="top">
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="csv">CSV（Excel）</el-dropdown-item>
+                <el-dropdown-item command="json">JSON</el-dropdown-item>
+                <el-dropdown-item command="bibtex">BibTeX（引用）</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </el-tooltip>
+        <el-tooltip content="导出当前勾选的论文（先勾选左侧 ☑ 框）" placement="top">
+          <el-dropdown
+            trigger="click"
+            :disabled="!selectedIds.length"
+            @command="exportSelected"
+          >
             <el-button :disabled="!selectedIds.length">
               导出选中 ({{ selectedIds.length }})<el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
-          </el-tooltip>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="csv">CSV（Excel）</el-dropdown-item>
-              <el-dropdown-item command="json">JSON</el-dropdown-item>
-              <el-dropdown-item command="bibtex">BibTeX（引用）</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="csv">CSV（Excel）</el-dropdown-item>
+                <el-dropdown-item command="json">JSON</el-dropdown-item>
+                <el-dropdown-item command="bibtex">BibTeX（引用）</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </el-tooltip>
         <span class="total">共 <span class="mono">{{ paperStore.total }}</span> 篇</span>
       </div>
 

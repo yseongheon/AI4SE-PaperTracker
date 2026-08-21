@@ -3,7 +3,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.schemas.stats import InstitutionDetailResponse, TrendResponse
+from app.schemas.stats import (
+    AuthorPage,
+    InstitutionDetailResponse,
+    InstitutionPage,
+    TrendResponse,
+)
 from app.services import institution_service, stats_service
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -28,20 +33,26 @@ def words(
     return stats_service.words(db, limit, scope)
 
 
-@router.get("/authors")
+@router.get("/authors", response_model=AuthorPage)
 def authors_top(
-    limit: int = Query(50, ge=10, le=100, description="榜单人数上限"),
+    page: int = Query(1, ge=1, description="页码（从 1 起）"),
+    page_size: int = Query(20, ge=1, le=100, description="每页条数"),
+    q: str | None = Query(None, description="按作者名模糊搜索（不区分大小写）"),
     db: Session = Depends(get_db),
 ) -> dict:
-    return stats_service.authors_top(db, limit)
+    items, total = stats_service.authors_top(db, page, page_size, q)
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
-@router.get("/institutions")
+@router.get("/institutions", response_model=InstitutionPage)
 def institutions_top(
-    limit: int = Query(50, ge=10, le=100, description="榜单机构数上限"),
+    page: int = Query(1, ge=1, description="页码（从 1 起）"),
+    page_size: int = Query(20, ge=1, le=100, description="每页条数"),
+    q: str | None = Query(None, description="按机构名模糊搜索（不区分大小写）"),
     db: Session = Depends(get_db),
 ) -> dict:
-    return stats_service.institutions_top(db, limit)
+    items, total = stats_service.institutions_top(db, page, page_size, q)
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/institution", response_model=InstitutionDetailResponse)

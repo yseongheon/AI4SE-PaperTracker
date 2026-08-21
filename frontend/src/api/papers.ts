@@ -33,6 +33,7 @@ export async function getDeepSummary(id: number): Promise<DeepSummary> {
 }
 
 // M6 导出下载 URL（携带当前筛选条件；浏览器直接打开即下载）
+// 注意：必须带 /api 前缀——后端导出路由是 /api/export（挂在 /api 下）；缺了会命中 SPA 兜底返回首页 HTML，点按钮无下载效果
 export function exportUrl(
   format: 'csv' | 'json' | 'bibtex',
   params: PaperListParams & { ids?: number[] },
@@ -50,5 +51,5 @@ export function exportUrl(
   if (params.author) sp.set('author', params.author)
   if (params.institution) sp.set('institution', params.institution)
   if (params.ids?.length) sp.set('ids', params.ids.join(','))
-  return `/export?${sp.toString()}`
+  return `/api/export?${sp.toString()}`
 }

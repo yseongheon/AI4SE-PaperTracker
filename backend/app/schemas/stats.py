@@ -47,3 +47,49 @@ class TrendResponse(BaseModel):
     end: str | None
     labels: list[str]
     series: list[TrendSeries]
+
+
+class TopicCount(BaseModel):
+    """作者/机构榜主要主题条目：slug/name_zh/count。"""
+
+    slug: str
+    name_zh: str
+    count: int
+
+
+class AuthorStat(BaseModel):
+    """作者榜条目：论文数（DISTINCT）+ AI4SE 数 + 主要主题 + 机构。"""
+
+    id: int
+    name: str
+    paper_count: int
+    ai4se_count: int
+    top_topics: list[TopicCount]
+    affiliation: str | None = None
+
+
+class InstitutionStat(BaseModel):
+    """机构榜条目：论文数（DISTINCT）+ AI4SE 数 + 主要主题。"""
+
+    name: str
+    paper_count: int
+    ai4se_count: int
+    top_topics: list[TopicCount]
+
+
+class AuthorPage(BaseModel):
+    """作者榜分页响应（M13 全量+分页，遵循 {items,total,page,page_size} 约定）。"""
+
+    items: list[AuthorStat]
+    total: int
+    page: int
+    page_size: int
+
+
+class InstitutionPage(BaseModel):
+    """机构榜分页响应（M13 全量+分页）。"""
+
+    items: list[InstitutionStat]
+    total: int
+    page: int
+    page_size: int

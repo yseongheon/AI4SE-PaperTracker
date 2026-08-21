@@ -83,7 +83,8 @@ def test_authors_top_aggregates(db):
     add_paper(db, "P3", "c", authors=("Bob Li",), confirmed=False)
     db.commit()
 
-    result = stats_service.authors_top(db, limit=10)
+    items, total = stats_service.authors_top(db, page=1, page_size=10)
+    result = {"authors": items}
 
     by_name = {a["name"]: a for a in result["authors"]}
     assert by_name["Alice Zhang"]["paper_count"] == 2
@@ -91,6 +92,7 @@ def test_authors_top_aggregates(db):
     assert by_name["Bob Li"]["paper_count"] == 2
     assert by_name["Bob Li"]["ai4se_count"] == 1  # P3 非 AI4SE
     assert result["authors"][0]["name"] == "Alice Zhang"  # 论文数降序
+    assert total == 2
 
 
 def test_authors_top_topics(db):
@@ -98,11 +100,13 @@ def test_authors_top_topics(db):
     add_paper(db, "P2", "b", topics=("code_repair",), authors=("Alice Zhang",))
     db.commit()
 
-    result = stats_service.authors_top(db, limit=10)
+    items, total = stats_service.authors_top(db, page=1, page_size=10)
+    result = {"authors": items}
 
     alice = result["authors"][0]
     assert alice["top_topics"][0]["slug"] == "code_repair"  # 频次最高的主题在前
     assert len(alice["top_topics"]) == 2
+    assert total == 1
 
 
 # ---- 会议×主题矩阵 ----
@@ -166,9 +170,11 @@ def test_authors_top_affiliation(db):
     add_paper(db, "P1", "a", authors=("Alice Zhang",), affiliations=("sun yat-sen university",))
     db.commit()
 
-    result = stats_service.authors_top(db, limit=10)
+    items, total = stats_service.authors_top(db, page=1, page_size=10)
+    result = {"authors": items}
 
     assert result["authors"][0]["affiliation"] == "sun yat-sen university"
+    assert total == 1
 
 
 def test_authors_top_skips_junk_affiliation(db):
@@ -176,9 +182,11 @@ def test_authors_top_skips_junk_affiliation(db):
     add_paper(db, "P1", "a", authors=("Alice Zhang",), affiliations=("peter",))
     db.commit()
 
-    result = stats_service.authors_top(db, limit=10)
+    items, total = stats_service.authors_top(db, page=1, page_size=10)
+    result = {"authors": items}
 
     assert result["authors"][0]["affiliation"] is None
+    assert total == 1
 
 
 def test_institutions_top_distinct_papers(db):
@@ -187,10 +195,12 @@ def test_institutions_top_distinct_papers(db):
               affiliations=("university of copenhagen", "university of copenhagen"))
     db.commit()
 
-    result = stats_service.institutions_top(db, limit=10)
+    items, total = stats_service.institutions_top(db, page=1, page_size=10)
+    result = {"institutions": items}
 
     insts = {i["name"]: i for i in result["institutions"]}
     assert insts["university of copenhagen"]["paper_count"] == 1
+    assert total == 1
 
 
 def test_institutions_top_filters_junk_and_counts_ai4se(db):
@@ -199,13 +209,99 @@ def test_institutions_top_filters_junk_and_counts_ai4se(db):
               confirmed=False)
     db.commit()
 
-    result = stats_service.institutions_top(db, limit=10)
+    items, total = stats_service.institutions_top(db, page=1, page_size=10)
+    result = {"institutions": items}
 
     names = {i["name"] for i in result["institutions"]}
     assert "peter" not in names  # 垃圾项过滤
     copenhagen = [i for i in result["institutions"] if i["name"] == "university of copenhagen"][0]
     assert copenhagen["paper_count"] == 1
     assert copenhagen["ai4se_count"] == 0  # P2 非 AI4SE
+    assert total == 1  # "peter" 垃圾机构不计入 total
+
+
+# ---- 作者/机构榜分页（M13） ----
+
+
+def test_authors_top_pagination(db):
+    for i in range(5):
+        add_paper(db, f"P{i}", "a", authors=(f"Author{i}",))
+    db.commit()
+
+    page1, total = stats_service.authors_top(db, page=1, page_size=2)
+    assert total == 5
+    assert [a["name"] for a in page1] == ["Author0", "Author1"]  # 论文数相同按 Author.id 升序
+    page2, _ = stats_service.authors_top(db, page=2, page_size=2)
+    assert [a["name"] for a in page2] == ["Author2", "Author3"]
+    page3, _ = stats_service.authors_top(db, page=3, page_size=2)
+    assert [a["name"] for a in page3] == ["Author4"]
+    page4, _ = stats_service.authors_top(db, page=4, page_size=2)
+    assert page4 == []
+
+
+def test_authors_top_page_beyond_end(db):
+    add_paper(db, "P1", "a", authors=("Alice Zhang",))
+    db.commit()
+
+    items, total = stats_service.authors_top(db, page=999, page_size=10)
+    assert items == []
+    assert total == 1
+
+
+def test_authors_top_search_q(db):
+    add_paper(db, "P1", "a", authors=("Alice Zhang",))
+    add_paper(db, "P2", "b", authors=("Bob Li",))
+    add_paper(db, "P3", "c", authors=("Carol Wu",))
+    db.commit()
+
+    items, total = stats_service.authors_top(db, page=1, page_size=10, q="alice")
+    assert total == 1
+    assert items[0]["name"] == "Alice Zhang"
+    # 不区分大小写 + 部分匹配
+    items, total = stats_service.authors_top(db, q="ZHANG")
+    assert total == 1 and items[0]["name"] == "Alice Zhang"
+    # 无匹配
+    items, total = stats_service.authors_top(db, q="zzz")
+    assert total == 0 and items == []
+
+
+def test_institutions_top_total_and_pagination(db):
+    # 5 个可信机构 + 1 个垃圾（作者名误填）→ total 只算可信数，垃圾不进任何页
+    for i in range(5):
+        add_paper(db, f"P{i}", "a", authors=(f"Author{i}",),
+                  affiliations=(f"university {i}",))
+    add_paper(db, "Pjunk", "a", authors=("Junk",), affiliations=("peter",))
+    db.commit()
+
+    items, total = stats_service.institutions_top(db, page=1, page_size=2)
+    assert total == 5
+    assert len(items) == 2
+    page3, total3 = stats_service.institutions_top(db, page=3, page_size=2)
+    assert len(page3) == 1  # 第 3 页只剩 1 条
+    assert total3 == 5
+    all_names = []
+    for page in range(1, 4):
+        page_items, _ = stats_service.institutions_top(db, page=page, page_size=2)
+        all_names += [i["name"] for i in page_items]
+    assert "peter" not in all_names
+
+
+def test_institutions_top_search_q(db):
+    add_paper(db, "P1", "a", authors=("Alice Zhang",),
+              affiliations=("university of copenhagen",))
+    add_paper(db, "P2", "b", authors=("Bob Li",),
+              affiliations=("kth royal institute of technology",))
+    db.commit()
+
+    items, total = stats_service.institutions_top(db, q="copenhagen")
+    assert total == 1
+    assert items[0]["name"] == "university of copenhagen"
+    # 大小写不敏感
+    items, total = stats_service.institutions_top(db, q="KTH")
+    assert total == 1 and items[0]["name"] == "kth royal institute of technology"
+    # 无匹配
+    items, total = stats_service.institutions_top(db, q="zzz")
+    assert total == 0 and items == []
 
 
 # ---- 机构详情（M12） ----
