@@ -27,3 +27,6 @@ Thumbs.db
 # Claude Code 本地任务文件（会话状态，不入仓库）
 .claude/scheduled_tasks.json
 .claude/scheduled_tasks.lock
+
+# 部署产物
+/deploy/*.tar.gz
