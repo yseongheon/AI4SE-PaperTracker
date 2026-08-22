@@ -42,6 +42,9 @@ const advSummary = computed(() => {
     parts.push(`年份 ${filter.yearFrom ?? '…'}-${filter.yearTo ?? '…'}`)
   }
   if (filter.minCitations != null) parts.push(`被引≥${filter.minCitations}`)
+  if (filter.marks) {
+    parts.push({ bookmark: '收藏', read: '已读', read_later: '稍后读', unread: '未读' }[filter.marks])
+  }
   return parts
 })
 
@@ -51,9 +54,9 @@ function applyAdvFilter() {
   filter.page = 1
 }
 
-// 清除高级筛选（保留搜索词与侧栏条件）
+// 清除高级筛选（保留搜索词与侧栏条件；marks 必须清，否则阅读状态锁住列表）
 function clearAdv() {
-  filter.$patch({ field: 'any', author: '', institution: '', yearFrom: null, yearTo: null, minCitations: null, page: 1 })
+  filter.$patch({ field: 'any', author: '', institution: '', yearFrom: null, yearTo: null, minCitations: null, marks: '', page: 1 })
 }
 
 onMounted(async () => {
@@ -249,6 +252,16 @@ function queryInstitutions(
               <el-radio-button value="any">标题+摘要</el-radio-button>
               <el-radio-button value="title">仅标题</el-radio-button>
               <el-radio-button value="abstract">仅摘要</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="adv-row">
+            <span class="adv-label">阅读状态</span>
+            <el-radio-group v-model="filter.marks" class="marks-group">
+              <el-radio value="">全部</el-radio>
+              <el-radio value="read">已读 ✓</el-radio>
+              <el-radio value="bookmark">收藏 ⭐</el-radio>
+              <el-radio value="read_later">稍后读</el-radio>
+              <el-radio value="unread">未读</el-radio>
             </el-radio-group>
           </div>
           <div class="adv-row">
@@ -474,6 +487,11 @@ function queryInstitutions(
 }
 .inst-input {
   flex: 1;
+}
+.marks-group {
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  row-gap: 8px;
 }
 .adv-actions {
   display: flex;

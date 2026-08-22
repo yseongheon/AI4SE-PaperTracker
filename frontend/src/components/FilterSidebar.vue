@@ -7,7 +7,7 @@ import type { TopicWithCount, VenueWithCount } from '../types'
 defineProps<{ topics: TopicWithCount[]; venues: VenueWithCount[]; years: number[] }>()
 
 const filter = useFilterStore()
-const { topic, venue, year, isAi4se, marks, sort } = storeToRefs(filter)
+const { topic, venue, year, isAi4se, sort } = storeToRefs(filter)
 </script>
 
 <template>
@@ -43,16 +43,6 @@ const { topic, venue, year, isAi4se, marks, sort } = storeToRefs(filter)
       <el-radio-group v-model="year" class="vert">
         <el-radio :value="null">全部</el-radio>
         <el-radio v-for="y in years" :key="y" :value="y">{{ y }}</el-radio>
-      </el-radio-group>
-    </div>
-    <div class="block">
-      <div class="block-title">阅读状态</div>
-      <el-radio-group v-model="marks" class="vert">
-        <el-radio value="">全部</el-radio>
-        <el-radio value="bookmark">只看收藏 ⭐</el-radio>
-        <el-radio value="read">只看已读 ✓</el-radio>
-        <el-radio value="read_later">只看稍后读</el-radio>
-        <el-radio value="unread">只看未读</el-radio>
       </el-radio-group>
     </div>
     <div class="block">

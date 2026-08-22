@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// M9 个人画像页（需登录）：标记统计 + 收藏主题分布 + 最近收藏 + 账号设置
+// M9 个人画像页（需登录）：标记统计 + 最近收藏 + 最近已读 + 账号设置
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -34,6 +34,13 @@ function goPaper(id: number) {
 function goReadList() {
   filter.reset()
   filter.marks = 'read'
+  router.push('/')
+}
+
+// 收藏卡片 / 「查看全部」点击 → 论文列表页（重置筛选，只看收藏）
+function goBookmarkList() {
+  filter.reset()
+  filter.marks = 'bookmark'
   router.push('/')
 }
 
@@ -110,9 +117,9 @@ async function savePassword() {
 
       <!-- 统计卡片 -->
       <div class="stats">
-        <div class="stat-card">
+        <div class="stat-card clickable" title="查看全部收藏论文" @click="goBookmarkList">
           <div class="stat-num mono">{{ profile.counts.bookmark }}</div>
-          <div class="stat-label">⭐ 收藏</div>
+          <div class="stat-label">⭐ 收藏 ›</div>
         </div>
         <div class="stat-card clickable" title="查看全部已读论文" @click="goReadList">
           <div class="stat-num mono">{{ profile.counts.read }}</div>
@@ -124,30 +131,13 @@ async function savePassword() {
         </div>
       </div>
 
-      <!-- 收藏主题分布 -->
-      <el-card class="card" shadow="never">
-        <template #header>
-          <span class="card-title">收藏论文主题分布</span>
-        </template>
-        <div v-if="profile.topic_dist.length" class="topic-bars">
-          <div v-for="t in profile.topic_dist" :key="t.slug" class="topic-bar">
-            <span class="topic-name">{{ t.name_zh }}</span>
-            <div class="bar-track">
-              <div
-                class="bar-fill"
-                :style="{ width: `${(t.count / profile.topic_dist[0].count) * 100}%` }"
-              />
-            </div>
-            <span class="topic-count mono">{{ t.count }}</span>
-          </div>
-        </div>
-        <p v-else class="empty">还没有收藏论文——在列表页点 ⭐ 即可收藏</p>
-      </el-card>
-
       <!-- 最近收藏 -->
       <el-card class="card" shadow="never">
         <template #header>
-          <span class="card-title">最近收藏</span>
+          <div class="card-head">
+            <span class="card-title">最近收藏</span>
+            <el-link type="primary" @click="goBookmarkList">查看全部 ›</el-link>
+          </div>
         </template>
         <ul v-if="profile.recent.length" class="recent">
           <li v-for="p in profile.recent" :key="p.id">
@@ -274,40 +264,6 @@ async function savePassword() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-}
-.topic-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.topic-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.topic-name {
-  width: 120px;
-  font-size: 13px;
-  color: var(--brand-text);
-}
-.bar-track {
-  flex: 1;
-  height: 10px;
-  background: var(--el-fill-color-light);
-  border-radius: 5px;
-  overflow: hidden;
-}
-.bar-fill {
-  height: 100%;
-  background: var(--brand-primary);
-  border-radius: 5px;
-  transition: width 0.3s;
-}
-.topic-count {
-  width: 40px;
-  text-align: right;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
 }
 .recent {
   list-style: none;
