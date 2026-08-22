@@ -37,7 +37,7 @@ def client(monkeypatch):
     db.add_all([icse, fse])
     repair = Topic(slug="code_repair", name_zh="代码修复")
     testing = Topic(slug="testing", name_zh="自动化测试")
-    llm = Topic(slug="llm4se_general", name_zh="LLM4SE 通用")
+    llm = Topic(slug="llm4se_general", name_zh="综合与综述")
     db.add_all([repair, testing, llm])
     db.commit()
 

@@ -137,7 +137,7 @@ Topic slugs (only when is_ai4se=true, pick 1-3):
 - testing 自动化测试
 - analysis 软件分析
 - requirements 需求工程
-- llm4se_general LLM4SE通用（大模型应用于软件工程的综合/框架/调研类）
+- llm4se_general 综合与综述（大模型应用于软件工程的综合/框架/调研类）
 - other 其他（AI4SE 但无合适主题）
 
 Rules:

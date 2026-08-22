@@ -167,7 +167,7 @@ AI4SE-PaperTracker/
 | **users** | id, username(unique), email(unique 可空), password_hash(pbkdf2), created_at | M9 课题组账号。认证：自建 HMAC token（DR-027），无邮箱验证（内网工具） |
 | **authors** | id, name, name_normalized(unique) | v1 仅小写/去点归一；同名歧义不处理 |
 | **paper_authors** | paper_id(FK), author_id(FK), position | N:M 关联，复合唯一 (paper_id, position) |
-| **topics** | id, slug(code_generation), name_zh(代码生成), description, parent_id(可空), is_active | 主题分类法是数据。初版 10 主题：code_generation 代码生成 / code_repair 代码修复 / code_translation 代码翻译 / code_summarization 代码摘要 / defect_detection 缺陷检测与定位 / testing 自动化测试 / analysis 软件分析 / requirements 需求工程 / llm4se_general LLM4SE 通用 / other 其他 |
+| **topics** | id, slug(code_generation), name_zh(代码生成), description, parent_id(可空), is_active | 主题分类法是数据。初版 10 主题：code_generation 代码生成 / code_repair 代码修复 / code_translation 代码翻译 / code_summarization 代码摘要 / defect_detection 缺陷检测与定位 / testing 自动化测试 / analysis 软件分析 / requirements 需求工程 / llm4se_general 综合与综述 / other 其他 |
 | **paper_topics** | paper_id, topic_id, confidence, method(keyword/llm), created_at | 多标签+置信度+标注来源（可追溯） |
 | **crawl_runs** | id, source(arxiv/dblp/llm), started_at, finished_at, status, fetched_count, new_count, updated_count, failed_count, error | 每次运行审计日志，支持失败重跑 |
 | **keyword_rules** | id, topic_id(可空), pattern, field(title/abstract/any), enabled | 关键词初筛规则可配置化 |

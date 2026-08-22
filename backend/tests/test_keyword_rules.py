@@ -21,7 +21,7 @@ def db():
 def _seed(db: Session) -> None:
     db.add(Topic(slug="code_repair", name_zh="代码修复"))
     db.add(Topic(slug="testing", name_zh="自动化测试"))
-    db.add(Topic(slug="llm4se_general", name_zh="LLM4SE 通用"))
+    db.add(Topic(slug="llm4se_general", name_zh="综合与综述"))
     db.commit()
 
 
